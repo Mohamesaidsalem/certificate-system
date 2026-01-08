@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Printer, Plus, Check, X, FileText, Calendar, User, CheckSquare, Square, ChevronDown, Upload, Download, Edit, Trash2, RotateCcw, Plane } from 'lucide-react';
+import { supabase } from '../supabaseClient'; // استيراد Supabase
 
 const CertificateManagementSystem = () => {
   const [certificates, setCertificates] = useState([]);
@@ -17,6 +18,7 @@ const CertificateManagementSystem = () => {
   const [searchField, setSearchField] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [loading, setLoading] = useState(false);
 
   const [formData, setFormData] = useState({
     no: '',
@@ -48,63 +50,102 @@ const CertificateManagementSystem = () => {
     };
   }, []);
 
-  const loadCertificates = () => {
+  // تحميل الشهادات من Supabase
+  const loadCertificates = async () => {
     try {
-      const stored = localStorage.getItem('certificates');
-      if (stored) {
-        setCertificates(JSON.parse(stored));
-      }
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('certificates')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      // تحويل البيانات من قاعدة البيانات إلى الصيغة المستخدمة في التطبيق
+      const formattedData = data.map(cert => ({
+        id: cert.id,
+        no: cert.no,
+        description: cert.description,
+        partNo: cert.part_no || '',
+        serialNo: cert.serial_no || '',
+        status: cert.status,
+        createdDate: cert.created_date || cert.created_at.split('T')[0],
+        delivered: cert.delivered,
+        deliveryInfo: cert.delivery_info
+      }));
+
+      setCertificates(formattedData);
     } catch (error) {
-      console.log('No existing data found');
+      console.error('Error loading certificates:', error);
+      alert('Error loading data from database');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const saveCertificates = (data) => {
-    try {
-      localStorage.setItem('certificates', JSON.stringify(data));
-    } catch (error) {
-      console.error('Error saving certificates:', error);
-    }
-  };
-
-  const handleAddCertificate = () => {
+  // إضافة أو تعديل شهادة
+  const handleAddCertificate = async () => {
     if (!formData.no || !formData.description) {
       alert('Please enter at least Number and Description');
       return;
     }
 
-    if (editMode && selectedCert) {
-      const updatedCerts = certificates.map(cert => 
-        cert.id === selectedCert.id 
-          ? { ...cert, ...formData }
-          : cert
-      );
-      setCertificates(updatedCerts);
-      saveCertificates(updatedCerts);
-      alert('Certificate updated successfully');
-    } else {
-      const newCert = {
-        id: Date.now(),
-        ...formData,
-        createdDate: new Date().toISOString().split('T')[0],
-        delivered: false,
-        deliveryInfo: null
-      };
-      const updatedCerts = [...certificates, newCert];
-      setCertificates(updatedCerts);
-      saveCertificates(updatedCerts);
+    try {
+      setLoading(true);
+
+      if (editMode && selectedCert) {
+        // تعديل شهادة موجودة
+        const { error } = await supabase
+          .from('certificates')
+          .update({
+            no: formData.no,
+            description: formData.description,
+            part_no: formData.partNo,
+            serial_no: formData.serialNo,
+            status: formData.status
+          })
+          .eq('id', selectedCert.id);
+
+        if (error) throw error;
+        alert('Certificate updated successfully');
+      } else {
+        // إضافة شهادة جديدة
+        const { error } = await supabase
+          .from('certificates')
+          .insert([{
+            no: formData.no,
+            description: formData.description,
+            part_no: formData.partNo,
+            serial_no: formData.serialNo,
+            status: formData.status,
+            created_date: new Date().toISOString().split('T')[0],
+            delivered: false,
+            delivery_info: null
+          }]);
+
+        if (error) throw error;
+        alert('Certificate added successfully');
+      }
+
+      // إعادة تحميل البيانات
+      await loadCertificates();
+      
+      setFormData({
+        no: '',
+        description: '',
+        partNo: '',
+        serialNo: '',
+        status: 'New'
+      });
+      setShowForm(false);
+      setEditMode(false);
+      setSelectedCert(null);
+    } catch (error) {
+      console.error('Error saving certificate:', error);
+      alert('Error saving certificate: ' + error.message);
+    } finally {
+      setLoading(false);
     }
-    
-    setFormData({
-      no: '',
-      description: '',
-      partNo: '',
-      serialNo: '',
-      status: 'New'
-    });
-    setShowForm(false);
-    setEditMode(false);
-    setSelectedCert(null);
   };
 
   const handleEditCertificate = (cert) => {
@@ -120,32 +161,54 @@ const CertificateManagementSystem = () => {
     setShowForm(true);
   };
 
-  const handleDeleteCertificate = (cert) => {
+  // حذف شهادة
+  const handleDeleteCertificate = async (cert) => {
     if (window.confirm(`Are you sure you want to delete Certificate No: ${cert.no}?`)) {
-      const updatedCerts = certificates.filter(c => c.id !== cert.id);
-      setCertificates(updatedCerts);
-      saveCertificates(updatedCerts);
-      setSelectedForPrint(prev => prev.filter(c => c.id !== cert.id));
-      setSelectedForDelivery(prev => prev.filter(c => c.id !== cert.id));
-      alert('Certificate deleted successfully!');
+      try {
+        setLoading(true);
+        const { error } = await supabase
+          .from('certificates')
+          .delete()
+          .eq('id', cert.id);
+
+        if (error) throw error;
+
+        await loadCertificates();
+        setSelectedForPrint(prev => prev.filter(c => c.id !== cert.id));
+        setSelectedForDelivery(prev => prev.filter(c => c.id !== cert.id));
+        alert('Certificate deleted successfully!');
+      } catch (error) {
+        console.error('Error deleting certificate:', error);
+        alert('Error deleting certificate');
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
-  const handleUndoDelivery = (cert) => {
+  // إلغاء التسليم
+  const handleUndoDelivery = async (cert) => {
     if (window.confirm(`Undo delivery for Certificate No: ${cert.no}?`)) {
-      const updatedCerts = certificates.map(c => {
-        if (c.id === cert.id) {
-          return {
-            ...c,
+      try {
+        setLoading(true);
+        const { error } = await supabase
+          .from('certificates')
+          .update({
             delivered: false,
-            deliveryInfo: null
-          };
-        }
-        return c;
-      });
-      setCertificates(updatedCerts);
-      saveCertificates(updatedCerts);
-      alert('Delivery undone successfully!');
+            delivery_info: null
+          })
+          .eq('id', cert.id);
+
+        if (error) throw error;
+
+        await loadCertificates();
+        alert('Delivery undone successfully!');
+      } catch (error) {
+        console.error('Error undoing delivery:', error);
+        alert('Error undoing delivery');
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -161,27 +224,35 @@ const CertificateManagementSystem = () => {
     setShowDeliveryForm(true);
   };
 
-  const confirmDelivery = () => {
+  // تأكيد التسليم
+  const confirmDelivery = async () => {
     if (!deliveryData.receiverName) {
       alert('Please enter receiver name');
       return;
     }
 
-    const updatedCerts = certificates.map(cert => {
-      if (cert.id === selectedCert.id) {
-        return {
-          ...cert,
+    try {
+      setLoading(true);
+      const { error } = await supabase
+        .from('certificates')
+        .update({
           delivered: true,
-          deliveryInfo: deliveryData
-        };
-      }
-      return cert;
-    });
+          delivery_info: deliveryData
+        })
+        .eq('id', selectedCert.id);
 
-    setCertificates(updatedCerts);
-    saveCertificates(updatedCerts);
-    setShowDeliveryForm(false);
-    setSelectedCert(null);
+      if (error) throw error;
+
+      await loadCertificates();
+      setShowDeliveryForm(false);
+      setSelectedCert(null);
+      alert('Certificate delivered successfully!');
+    } catch (error) {
+      console.error('Error confirming delivery:', error);
+      alert('Error confirming delivery');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleBulkDelivery = () => {
@@ -194,31 +265,39 @@ const CertificateManagementSystem = () => {
     setShowDeliveryForm(true);
   };
 
-  const confirmBulkDelivery = () => {
+  // تأكيد التسليم الجماعي
+  const confirmBulkDelivery = async () => {
     if (!deliveryData.receiverName) {
       alert('Please enter receiver name');
       return;
     }
 
-    const selectedIds = selectedForDelivery.map(c => c.id);
-    const updatedCerts = certificates.map(cert => {
-      if (selectedIds.includes(cert.id) && !cert.delivered) {
-        return {
-          ...cert,
-          delivered: true,
-          deliveryInfo: deliveryData
-        };
-      }
-      return cert;
-    });
+    try {
+      setLoading(true);
+      const undelivered = selectedForDelivery.filter(c => !c.delivered);
+      const ids = undelivered.map(c => c.id);
 
-    const deliveredCount = selectedForDelivery.filter(c => !c.delivered).length;
-    setCertificates(updatedCerts);
-    saveCertificates(updatedCerts);
-    setShowDeliveryForm(false);
-    setSelectedCert(null);
-    setSelectedForDelivery([]);
-    alert(`Successfully delivered ${deliveredCount} certificate(s)!`);
+      const { error } = await supabase
+        .from('certificates')
+        .update({
+          delivered: true,
+          delivery_info: deliveryData
+        })
+        .in('id', ids);
+
+      if (error) throw error;
+
+      await loadCertificates();
+      setShowDeliveryForm(false);
+      setSelectedCert(null);
+      setSelectedForDelivery([]);
+      alert(`Successfully delivered ${undelivered.length} certificate(s)!`);
+    } catch (error) {
+      console.error('Error confirming bulk delivery:', error);
+      alert('Error confirming bulk delivery');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const toggleSelectForDelivery = (certId) => {
@@ -302,7 +381,6 @@ const CertificateManagementSystem = () => {
     }
 
     try {
-      // تحويل البيانات لصيغة CSV
       const headers = ['Certificate No.', 'Description', 'Part No.', 'Serial No.', 'Status', 'Created Date', 'Delivered', 'Receiver Name', 'Receiver Position', 'Delivery Date', 'Signature', 'Notes'];
       
       const csvData = dataToExport.map(cert => [
@@ -320,13 +398,11 @@ const CertificateManagementSystem = () => {
         cert.deliveryInfo?.notes || ''
       ]);
 
-      // إنشاء CSV
       let csv = headers.join(',') + '\n';
       csvData.forEach(row => {
         csv += row.map(cell => `"${cell}"`).join(',') + '\n';
       });
 
-      // تحميل الملف
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
       const url = URL.createObjectURL(blob);
@@ -344,13 +420,14 @@ const CertificateManagementSystem = () => {
     }
   };
 
-  const handleImportExcel = (event) => {
+  const handleImportExcel = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
+        setLoading(true);
         const text = e.target.result;
         const lines = text.split('\n');
         
@@ -359,10 +436,8 @@ const CertificateManagementSystem = () => {
           return;
         }
 
-        // قراءة الهيدر
         const headers = lines[0].split(',').map(h => h.replace(/"/g, '').trim());
         
-        // التأكد من وجود الأعمدة المطلوبة
         const noIndex = headers.findIndex(h => h.toLowerCase().includes('certificate') || h.toLowerCase().includes('no'));
         const descIndex = headers.findIndex(h => h.toLowerCase().includes('description'));
         
@@ -375,7 +450,6 @@ const CertificateManagementSystem = () => {
         const serialIndex = headers.findIndex(h => h.toLowerCase().includes('serial'));
         const statusIndex = headers.findIndex(h => h.toLowerCase().includes('status'));
 
-        // قراءة البيانات
         const importedCerts = [];
         for (let i = 1; i < lines.length; i++) {
           if (!lines[i].trim()) continue;
@@ -384,15 +458,14 @@ const CertificateManagementSystem = () => {
           
           if (cells[noIndex] && cells[descIndex]) {
             importedCerts.push({
-              id: Date.now() + Math.random(),
               no: cells[noIndex],
               description: cells[descIndex],
-              partNo: partIndex !== -1 ? cells[partIndex] : '',
-              serialNo: serialIndex !== -1 ? cells[serialIndex] : '',
+              part_no: partIndex !== -1 ? cells[partIndex] : '',
+              serial_no: serialIndex !== -1 ? cells[serialIndex] : '',
               status: statusIndex !== -1 && cells[statusIndex] ? cells[statusIndex] : 'New',
-              createdDate: new Date().toISOString().split('T')[0],
+              created_date: new Date().toISOString().split('T')[0],
               delivered: false,
-              deliveryInfo: null
+              delivery_info: null
             });
           }
         }
@@ -402,17 +475,23 @@ const CertificateManagementSystem = () => {
           return;
         }
 
-        const updatedCerts = [...certificates, ...importedCerts];
-        setCertificates(updatedCerts);
-        saveCertificates(updatedCerts);
+        // إدراج البيانات في Supabase
+        const { error } = await supabase
+          .from('certificates')
+          .insert(importedCerts);
+
+        if (error) throw error;
+
+        await loadCertificates();
         setShowImportModal(false);
         alert(`Successfully imported ${importedCerts.length} certificate(s)!`);
         
-        // مسح input
         event.target.value = '';
       } catch (error) {
-        alert('Error reading file. Please make sure it is a valid CSV file.');
+        alert('Error importing data: ' + error.message);
         console.error(error);
+      } finally {
+        setLoading(false);
       }
     };
     
@@ -470,13 +549,11 @@ const CertificateManagementSystem = () => {
     return matchesSearch && matchesFilter;
   });
 
-  // Pagination
   const totalPages = Math.ceil(filteredCertificates.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const paginatedCertificates = filteredCertificates.slice(startIndex, endIndex);
 
-  // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, filterStatus, searchField]);
@@ -499,8 +576,28 @@ const CertificateManagementSystem = () => {
     </div>
   );
 
+  // مؤشر التحميل
+  if (loading && certificates.length === 0) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 font-medium">Loading certificates...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+      {/* مؤشر التحميل العائم */}
+      {loading && (
+        <div className="fixed top-4 right-4 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg z-50 flex items-center gap-2">
+          <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+          <span className="text-sm font-medium">Processing...</span>
+        </div>
+      )}
+
       <style>{`
         @media print {
           * {
@@ -566,7 +663,8 @@ const CertificateManagementSystem = () => {
               <div className="flex gap-2">
                 <button
                   onClick={() => setShowImportModal(true)}
-                  className="bg-green-600 text-white px-3 py-1.5 rounded-md flex items-center gap-1.5 hover:bg-green-700 transition-all shadow-sm hover:shadow text-xs font-medium"
+                  disabled={loading}
+                  className="bg-green-600 text-white px-3 py-1.5 rounded-md flex items-center gap-1.5 hover:bg-green-700 transition-all shadow-sm hover:shadow text-xs font-medium disabled:opacity-50"
                 >
                   <Upload size={14} />
                   Import
@@ -591,7 +689,8 @@ const CertificateManagementSystem = () => {
                     });
                     setShowForm(true);
                   }}
-                  className="bg-blue-600 text-white px-3 py-1.5 rounded-md flex items-center gap-1.5 hover:bg-blue-700 transition-all shadow-sm hover:shadow text-xs font-medium"
+                  disabled={loading}
+                  className="bg-blue-600 text-white px-3 py-1.5 rounded-md flex items-center gap-1.5 hover:bg-blue-700 transition-all shadow-sm hover:shadow text-xs font-medium disabled:opacity-50"
                 >
                   <Plus size={14} />
                   Add New
@@ -651,7 +750,7 @@ const CertificateManagementSystem = () => {
                   </p>
                   <button
                     onClick={handleBulkDelivery}
-                    disabled={selectedForDelivery.filter(c => !c.delivered).length === 0}
+                    disabled={selectedForDelivery.filter(c => !c.delivered).length === 0 || loading}
                     className="bg-green-600 text-white px-2 py-1 rounded hover:bg-green-700 disabled:bg-gray-300 text-xs font-medium flex items-center gap-1"
                   >
                     <Check size={12} />
@@ -662,10 +761,9 @@ const CertificateManagementSystem = () => {
             </div>
           )}
 
-          {/* Search and Filters - Right above the table */}
+          {/* Search and Filters */}
           <div className="bg-white rounded-lg shadow-md p-3 mb-3">
             <div className="grid grid-cols-12 gap-2">
-              {/* Search Field Selector */}
               <div className="col-span-12 sm:col-span-2">
                 <select
                   value={searchField}
@@ -680,7 +778,6 @@ const CertificateManagementSystem = () => {
                 </select>
               </div>
 
-              {/* Search */}
               <div className="col-span-12 sm:col-span-4 relative">
                 <Search className="absolute left-3 top-2.5 text-gray-400" size={16} />
                 <input
@@ -692,7 +789,6 @@ const CertificateManagementSystem = () => {
                 />
               </div>
 
-              {/* Items per page */}
               <div className="col-span-6 sm:col-span-1">
                 <select
                   value={itemsPerPage}
@@ -711,7 +807,6 @@ const CertificateManagementSystem = () => {
                 </select>
               </div>
 
-              {/* Filter */}
               <div className="col-span-6 sm:col-span-2">
                 <select
                   value={filterStatus}
@@ -724,7 +819,6 @@ const CertificateManagementSystem = () => {
                 </select>
               </div>
 
-              {/* Select All Print */}
               <div className="col-span-6 sm:col-span-1">
                 <button
                   onClick={selectAllForPrint}
@@ -735,7 +829,6 @@ const CertificateManagementSystem = () => {
                 </button>
               </div>
 
-              {/* Select All Deliver */}
               <div className="col-span-6 sm:col-span-1">
                 <button
                   onClick={selectAllForDelivery}
@@ -746,7 +839,6 @@ const CertificateManagementSystem = () => {
                 </button>
               </div>
 
-              {/* Print Button */}
               <div className="col-span-12 sm:col-span-1 relative">
                 <button
                   onClick={() => setShowPrintMenu(!showPrintMenu)}
@@ -869,7 +961,8 @@ const CertificateManagementSystem = () => {
                           <div className="flex gap-1 flex-wrap">
                             <button
                               onClick={() => handleEditCertificate(cert)}
-                              className="bg-yellow-500 text-white p-1.5 rounded hover:bg-yellow-600 transition-colors shadow-sm hover:shadow"
+                              disabled={loading}
+                              className="bg-yellow-500 text-white p-1.5 rounded hover:bg-yellow-600 transition-colors shadow-sm hover:shadow disabled:opacity-50"
                               title="Edit Certificate"
                             >
                               <Edit size={12} />
@@ -877,7 +970,8 @@ const CertificateManagementSystem = () => {
                             {!cert.delivered ? (
                               <button
                                 onClick={() => handleDelivery(cert)}
-                                className="bg-green-600 text-white p-1.5 rounded hover:bg-green-700 transition-colors shadow-sm hover:shadow"
+                                disabled={loading}
+                                className="bg-green-600 text-white p-1.5 rounded hover:bg-green-700 transition-colors shadow-sm hover:shadow disabled:opacity-50"
                                 title="Mark as Delivered"
                               >
                                 <Check size={12} />
@@ -885,7 +979,8 @@ const CertificateManagementSystem = () => {
                             ) : (
                               <button
                                 onClick={() => handleUndoDelivery(cert)}
-                                className="bg-orange-500 text-white p-1.5 rounded hover:bg-orange-600 transition-colors shadow-sm hover:shadow"
+                                disabled={loading}
+                                className="bg-orange-500 text-white p-1.5 rounded hover:bg-orange-600 transition-colors shadow-sm hover:shadow disabled:opacity-50"
                                 title="Undo Delivery"
                               >
                                 <RotateCcw size={12} />
@@ -903,7 +998,8 @@ const CertificateManagementSystem = () => {
                                 e.stopPropagation();
                                 handleDeleteCertificate(cert);
                               }}
-                              className="bg-red-600 text-white p-1.5 rounded hover:bg-red-700 transition-colors shadow-sm hover:shadow"
+                              disabled={loading}
+                              className="bg-red-600 text-white p-1.5 rounded hover:bg-red-700 transition-colors shadow-sm hover:shadow disabled:opacity-50"
                               title="Delete Certificate"
                             >
                               <Trash2 size={12} />
@@ -998,6 +1094,7 @@ const CertificateManagementSystem = () => {
           </div>
         </div>
 
+        {/* Form Modals - باقي الكود كما هو */}
         {showForm && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-xl p-4 sm:p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -1064,7 +1161,8 @@ const CertificateManagementSystem = () => {
                 </button>
                 <button
                   onClick={handleAddCertificate}
-                  className="px-4 sm:px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+                  disabled={loading}
+                  className="px-4 sm:px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm disabled:opacity-50"
                 >
                   {editMode ? 'Update' : 'Save'}
                 </button>
@@ -1174,7 +1272,8 @@ const CertificateManagementSystem = () => {
                       confirmDelivery();
                     }
                   }}
-                  className="px-4 sm:px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2 text-sm"
+                  disabled={loading}
+                  className="px-4 sm:px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2 text-sm disabled:opacity-50"
                 >
                   <Check size={16} />
                   {selectedForDelivery.length > 0 && selectedCert.no.includes('certificates') 
@@ -1213,12 +1312,13 @@ const CertificateManagementSystem = () => {
               </div>
 
               <div className="mb-4 sm:mb-6">
-                <label className="block text-xs sm:text-sm font-medium mb-2">Select Excel File</label>
+                <label className="block text-xs sm:text-sm font-medium mb-2">Select CSV File</label>
                 <input
                   type="file"
-                  accept=".xlsx,.xls"
+                  accept=".csv,.txt"
                   onChange={handleImportExcel}
-                  className="w-full px-3 sm:px-4 py-2 border rounded-lg text-sm"
+                  disabled={loading}
+                  className="w-full px-3 sm:px-4 py-2 border rounded-lg text-sm disabled:opacity-50"
                 />
               </div>
               
@@ -1238,6 +1338,7 @@ const CertificateManagementSystem = () => {
   );
 };
 
+// Print Components - نفس الكود السابق
 const SingleCertificatePrint = ({ cert, index, total }) => (
   <div className="p-12 bg-white" style={{ pageBreakAfter: 'always' }}>
     <div className="flex items-center justify-between mb-6">
