@@ -40,6 +40,21 @@ const LoginPage = () => {
       },
     },
     {
+      username: "said",
+      password: "Said123456",
+      role: "admin",
+      name: "Administrator",
+      permissions: {
+        readOnly: false,
+        allowDelete: true,
+        canEdit: true,
+        canAdd: true,
+        canDeliver: true,
+        canImport: true,
+        canExport: true,
+      },
+    },
+    {
       username: "viewer",
       password: "viewer123",
       role: "viewer",
@@ -90,14 +105,6 @@ const LoginPage = () => {
     }
 
     setLoading(false);
-  };
-
-  const quickLogin = (role) => {
-    const user = users.find((u) => u.role === role);
-    if (user) {
-      setUsername(user.username);
-      setPassword(user.password);
-    }
   };
 
   return (
@@ -194,33 +201,6 @@ const LoginPage = () => {
             </button>
           </form>
 
-          {/* Quick Login Demo */}
-          <div className="mt-6 pt-6 border-t border-gray-200">
-            <p className="text-xs text-gray-500 text-center mb-3">
-              Quick login for testing:
-            </p>
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                onClick={() => quickLogin("admin")}
-                className="px-3 py-2 bg-purple-100 text-purple-700 rounded-lg text-xs font-medium hover:bg-purple-200 transition-colors"
-              >
-                Admin
-              </button>
-              <button
-                onClick={() => quickLogin("viewer")}
-                className="px-3 py-2 bg-green-100 text-green-700 rounded-lg text-xs font-medium hover:bg-green-200 transition-colors"
-              >
-                Viewer
-              </button>
-              <button
-                onClick={() => quickLogin("certificate-only")}
-                className="px-3 py-2 bg-blue-100 text-blue-700 rounded-lg text-xs font-medium hover:bg-blue-200 transition-colors"
-              >
-                Cert Only
-              </button>
-            </div>
-          </div>
-
           {/* Users Info */}
           <div className="mt-4 bg-gray-50 rounded-lg p-4">
             <p className="text-xs font-semibold text-gray-700 mb-2">
@@ -242,7 +222,7 @@ const LoginPage = () => {
 
         {/* Footer */}
         <p className="text-center text-sm text-gray-500 mt-6">
-          © 2024 Smart Aviation. All rights reserved.
+          © 2026 Smart Aviation..
         </p>
       </div>
     </div>
