@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Printer, Plus, Check, X, FileText, Calendar, User, CheckSquare, Square, ChevronDown, Upload, Download, Edit, Trash2, RotateCcw, Plane } from 'lucide-react';
-import { supabase } from '../supabaseClient'; // استيراد Supabase
+import { supabase } from "./supabaseClient";
 
-const CertificateManagementSystem = () => {
+const CertificateManagementSystem = ({ readOnly = false, allowDelete = true }) => {
   const [certificates, setCertificates] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [showDeliveryForm, setShowDeliveryForm] = useState(false);
@@ -50,7 +50,6 @@ const CertificateManagementSystem = () => {
     };
   }, []);
 
-  // تحميل الشهادات من Supabase
   const loadCertificates = async () => {
     try {
       setLoading(true);
@@ -61,7 +60,6 @@ const CertificateManagementSystem = () => {
 
       if (error) throw error;
 
-      // تحويل البيانات من قاعدة البيانات إلى الصيغة المستخدمة في التطبيق
       const formattedData = data.map(cert => ({
         id: cert.id,
         no: cert.no,
@@ -83,72 +81,129 @@ const CertificateManagementSystem = () => {
     }
   };
 
-  // إضافة أو تعديل شهادة
   const handleAddCertificate = async () => {
-    if (!formData.no || !formData.description) {
-      alert('Please enter at least Number and Description');
+  if (readOnly) {
+    alert('You do not have permission to edit');
+    return;
+  }
+
+  if (!formData.no || !formData.description) {
+    alert('Please enter at least Number and Description');
+    return;
+  }
+
+  // Check for duplicate Serial No
+  if (formData.serialNo && formData.serialNo.trim() !== '') {
+    const serialExists = await checkSerialNoExists(
+      formData.serialNo,
+      editMode ? selectedCert.id : null
+    );
+
+    if (serialExists) {
+      alert('⚠️ This Serial Number already exists! Please use a different Serial Number.');
+      return;
+    }
+  }
+
+  try {
+    setLoading(true);
+
+    if (editMode && selectedCert) {
+      const { error } = await supabase
+        .from('certificates')
+        .update({
+          no: formData.no,
+          description: formData.description,
+          part_no: formData.partNo,
+          serial_no: formData.serialNo,
+          status: formData.status
+        })
+        .eq('id', selectedCert.id);
+
+      if (error) {
+        if (error.code === '23505') {
+          alert('⚠️ This Serial Number already exists!');
+          return;
+        }
+        throw error;
+      }
+      alert('Certificate updated successfully');
+    } else {
+      const { error } = await supabase
+        .from('certificates')
+        .insert([{
+          no: formData.no,
+          description: formData.description,
+          part_no: formData.partNo,
+          serial_no: formData.serialNo,
+          status: formData.status,
+          created_date: new Date().toISOString().split('T')[0],
+          delivered: false,
+          delivery_info: null
+        }]);
+
+      if (error) {
+        if (error.code === '23505') {
+          alert('⚠️ This Serial Number already exists!');
+          return;
+        }
+        throw error;
+      }
+      alert('Certificate added successfully');
+    }
+
+    await loadCertificates();
+    
+    setFormData({
+      no: '',
+      description: '',
+      partNo: '',
+      serialNo: '',
+      status: 'New'
+    });
+    setShowForm(false);
+    setEditMode(false);
+    setSelectedCert(null);
+  } catch (error) {
+    console.error('Error saving certificate:', error);
+    alert('Error saving certificate: ' + error.message);
+  } finally {
+    setLoading(false);
+  }
+};
+// Check if Serial No already exists
+const checkSerialNoExists = async (serialNo, currentCertId = null) => {
+  if (!serialNo || serialNo.trim() === '') {
+    return false;
+  }
+
+  try {
+    let query = supabase
+      .from('certificates')
+      .select('id, no')
+      .eq('serial_no', serialNo.trim());
+
+    if (currentCertId) {
+      query = query.neq('id', currentCertId);
+    }
+
+    const { data, error } = await query;
+
+    if (error) throw error;
+
+    return data && data.length > 0;
+  } catch (error) {
+    console.error('Error checking serial number:', error);
+    return false;
+  }
+};
+
+  const handleEditCertificate = (cert) => {
+    if (readOnly) {
+      alert('You do not have permission');
       return;
     }
 
-    try {
-      setLoading(true);
-
-      if (editMode && selectedCert) {
-        // تعديل شهادة موجودة
-        const { error } = await supabase
-          .from('certificates')
-          .update({
-            no: formData.no,
-            description: formData.description,
-            part_no: formData.partNo,
-            serial_no: formData.serialNo,
-            status: formData.status
-          })
-          .eq('id', selectedCert.id);
-
-        if (error) throw error;
-        alert('Certificate updated successfully');
-      } else {
-        // إضافة شهادة جديدة
-        const { error } = await supabase
-          .from('certificates')
-          .insert([{
-            no: formData.no,
-            description: formData.description,
-            part_no: formData.partNo,
-            serial_no: formData.serialNo,
-            status: formData.status,
-            created_date: new Date().toISOString().split('T')[0],
-            delivered: false,
-            delivery_info: null
-          }]);
-
-        if (error) throw error;
-        alert('Certificate added successfully');
-      }
-
-      // إعادة تحميل البيانات
-      await loadCertificates();
-      
-      setFormData({
-        no: '',
-        description: '',
-        partNo: '',
-        serialNo: '',
-        status: 'New'
-      });
-      setShowForm(false);
-      setEditMode(false);
-      setSelectedCert(null);
-    } catch (error) {
-      console.error('Error saving certificate:', error);
-      alert('Error saving certificate: ' + error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleEditCertificate = (cert) => {
     setSelectedCert(cert);
     setFormData({
       no: cert.no,
@@ -161,8 +216,12 @@ const CertificateManagementSystem = () => {
     setShowForm(true);
   };
 
-  // حذف شهادة
   const handleDeleteCertificate = async (cert) => {
+    if (readOnly || !allowDelete) {
+      alert('You do not have permission to delete');
+      return;
+    }
+
     if (window.confirm(`Are you sure you want to delete Certificate No: ${cert.no}?`)) {
       try {
         setLoading(true);
@@ -186,8 +245,12 @@ const CertificateManagementSystem = () => {
     }
   };
 
-  // إلغاء التسليم
   const handleUndoDelivery = async (cert) => {
+    if (readOnly) {
+      alert('You do not have permission');
+      return;
+    }
+
     if (window.confirm(`Undo delivery for Certificate No: ${cert.no}?`)) {
       try {
         setLoading(true);
@@ -213,6 +276,11 @@ const CertificateManagementSystem = () => {
   };
 
   const handleDelivery = (cert) => {
+    if (readOnly) {
+      alert('You do not have permission');
+      return;
+    }
+
     setSelectedCert(cert);
     setDeliveryData({
       receiverName: '',
@@ -224,7 +292,6 @@ const CertificateManagementSystem = () => {
     setShowDeliveryForm(true);
   };
 
-  // تأكيد التسليم
   const confirmDelivery = async () => {
     if (!deliveryData.receiverName) {
       alert('Please enter receiver name');
@@ -256,6 +323,11 @@ const CertificateManagementSystem = () => {
   };
 
   const handleBulkDelivery = () => {
+    if (readOnly) {
+      alert('You do not have permission');
+      return;
+    }
+
     const undeliveredSelected = selectedForDelivery.filter(cert => !cert.delivered);
     if (undeliveredSelected.length === 0) {
       alert('Please select undelivered certificates');
@@ -265,7 +337,6 @@ const CertificateManagementSystem = () => {
     setShowDeliveryForm(true);
   };
 
-  // تأكيد التسليم الجماعي
   const confirmBulkDelivery = async () => {
     if (!deliveryData.receiverName) {
       alert('Please enter receiver name');
@@ -421,6 +492,12 @@ const CertificateManagementSystem = () => {
   };
 
   const handleImportExcel = async (event) => {
+    if (readOnly) {
+      alert('You do not have permission to add');
+      event.target.value = '';
+      return;
+    }
+
     const file = event.target.files[0];
     if (!file) return;
 
@@ -475,7 +552,6 @@ const CertificateManagementSystem = () => {
           return;
         }
 
-        // إدراج البيانات في Supabase
         const { error } = await supabase
           .from('certificates')
           .insert(importedCerts);
@@ -576,7 +652,6 @@ const CertificateManagementSystem = () => {
     </div>
   );
 
-  // مؤشر التحميل
   if (loading && certificates.length === 0) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
@@ -590,7 +665,6 @@ const CertificateManagementSystem = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      {/* مؤشر التحميل العائم */}
       {loading && (
         <div className="fixed top-4 right-4 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg z-50 flex items-center gap-2">
           <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
@@ -656,19 +730,20 @@ const CertificateManagementSystem = () => {
 
       <div className="print:hidden">
         <div className="container mx-auto px-3 py-3 max-w-7xl">
-          {/* Header with Logo and Actions */}
           <div className="bg-white rounded-lg shadow-md p-3 mb-3">
             <div className="flex items-center justify-between">
               <Logo />
               <div className="flex gap-2">
-                <button
-                  onClick={() => setShowImportModal(true)}
-                  disabled={loading}
-                  className="bg-green-600 text-white px-3 py-1.5 rounded-md flex items-center gap-1.5 hover:bg-green-700 transition-all shadow-sm hover:shadow text-xs font-medium disabled:opacity-50"
-                >
-                  <Upload size={14} />
-                  Import
-                </button>
+                {!readOnly && (
+                  <button
+                    onClick={() => setShowImportModal(true)}
+                    disabled={loading}
+                    className="bg-green-600 text-white px-3 py-1.5 rounded-md flex items-center gap-1.5 hover:bg-green-700 transition-all shadow-sm hover:shadow text-xs font-medium disabled:opacity-50"
+                  >
+                    <Upload size={14} />
+                    Import
+                  </button>
+                )}
                 <button
                   onClick={handleExportExcel}
                   className="bg-purple-600 text-white px-3 py-1.5 rounded-md flex items-center gap-1.5 hover:bg-purple-700 transition-all shadow-sm hover:shadow text-xs font-medium"
@@ -676,30 +751,31 @@ const CertificateManagementSystem = () => {
                   <Download size={14} />
                   Export
                 </button>
-                <button
-                  onClick={() => {
-                    setEditMode(false);
-                    setSelectedCert(null);
-                    setFormData({
-                      no: '',
-                      description: '',
-                      partNo: '',
-                      serialNo: '',
-                      status: 'New'
-                    });
-                    setShowForm(true);
-                  }}
-                  disabled={loading}
-                  className="bg-blue-600 text-white px-3 py-1.5 rounded-md flex items-center gap-1.5 hover:bg-blue-700 transition-all shadow-sm hover:shadow text-xs font-medium disabled:opacity-50"
-                >
-                  <Plus size={14} />
-                  Add New
-                </button>
+                {!readOnly && (
+                  <button
+                    onClick={() => {
+                      setEditMode(false);
+                      setSelectedCert(null);
+                      setFormData({
+                        no: '',
+                        description: '',
+                        partNo: '',
+                        serialNo: '',
+                        status: 'New'
+                      });
+                      setShowForm(true);
+                    }}
+                    disabled={loading}
+                    className="bg-blue-600 text-white px-3 py-1.5 rounded-md flex items-center gap-1.5 hover:bg-blue-700 transition-all shadow-sm hover:shadow text-xs font-medium disabled:opacity-50"
+                  >
+                    <Plus size={14} />
+                    Add New
+                  </button>
+                )}
               </div>
             </div>
           </div>
 
-          {/* Statistics Cards */}
           <div className="grid grid-cols-3 gap-3 mb-3">
             <div className="bg-gradient-to-br from-blue-500 to-blue-600 text-white p-3 rounded-lg shadow-md hover:shadow-lg transition-shadow">
               <div className="flex items-center justify-between">
@@ -730,7 +806,6 @@ const CertificateManagementSystem = () => {
             </div>
           </div>
           
-          {/* Selection Info */}
           {(selectedForPrint.length > 0 || selectedForDelivery.length > 0) && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
               {selectedForPrint.length > 0 && (
@@ -742,7 +817,7 @@ const CertificateManagementSystem = () => {
                 </div>
               )}
               
-              {selectedForDelivery.length > 0 && (
+              {selectedForDelivery.length > 0 && !readOnly && (
                 <div className="bg-green-50 border-l-4 border-green-500 rounded-r-lg p-2 shadow-sm flex items-center justify-between">
                   <p className="text-xs text-green-800 font-medium">
                     <Check size={12} className="inline mr-1" />
@@ -761,7 +836,6 @@ const CertificateManagementSystem = () => {
             </div>
           )}
 
-          {/* Search and Filters */}
           <div className="bg-white rounded-lg shadow-md p-3 mb-3">
             <div className="grid grid-cols-12 gap-2">
               <div className="col-span-12 sm:col-span-2">
@@ -829,15 +903,17 @@ const CertificateManagementSystem = () => {
                 </button>
               </div>
 
-              <div className="col-span-6 sm:col-span-1">
-                <button
-                  onClick={selectAllForDelivery}
-                  className="w-full px-2 py-2 border-2 border-green-500 text-green-600 rounded-md hover:bg-green-50 text-xs font-medium transition-colors"
-                  title="Select All for Delivery"
-                >
-                  <Check size={12} className="inline" />
-                </button>
-              </div>
+              {!readOnly && (
+                <div className="col-span-6 sm:col-span-1">
+                  <button
+                    onClick={selectAllForDelivery}
+                    className="w-full px-2 py-2 border-2 border-green-500 text-green-600 rounded-md hover:bg-green-50 text-xs font-medium transition-colors"
+                    title="Select All for Delivery"
+                  >
+                    <Check size={12} className="inline" />
+                  </button>
+                </div>
+              )}
 
               <div className="col-span-12 sm:col-span-1 relative">
                 <button
@@ -867,7 +943,7 @@ const CertificateManagementSystem = () => {
                     >
                       <FileText size={14} className="text-green-600" />
                       <div>
-                        <div className="font-medium">Combined Receipt</div>
+                        <div className="font-medium">Print Selected</div>
                         <div className="text-xs text-gray-500">All in one document</div>
                       </div>
                     </button>
@@ -889,13 +965,15 @@ const CertificateManagementSystem = () => {
                         }
                       </button>
                     </th>
-                    <th className="w-10 px-2 py-3 text-left">
-                      <button onClick={selectAllForDelivery} title="Select for Delivery" className="hover:bg-green-50 p-1 rounded">
-                        {selectedForDelivery.length === filteredCertificates.filter(c => !c.delivered).length && filteredCertificates.filter(c => !c.delivered).length > 0 ? 
-                          <CheckSquare size={16} className="text-green-600" /> : <Square size={16} />
-                        }
-                      </button>
-                    </th>
+                    {!readOnly && (
+                      <th className="w-10 px-2 py-3 text-left">
+                        <button onClick={selectAllForDelivery} title="Select for Delivery" className="hover:bg-green-50 p-1 rounded">
+                          {selectedForDelivery.length === filteredCertificates.filter(c => !c.delivered).length && filteredCertificates.filter(c => !c.delivered).length > 0 ? 
+                            <CheckSquare size={16} className="text-green-600" /> : <Square size={16} />
+                          }
+                        </button>
+                      </th>
+                    )}
                     <th className="w-28 px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">No.</th>
                     <th className="w-48 px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider hidden md:table-cell">Description</th>
                     <th className="w-28 px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider hidden lg:table-cell">Part No.</th>
@@ -907,7 +985,7 @@ const CertificateManagementSystem = () => {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {paginatedCertificates.length === 0 ? (
                     <tr>
-                      <td colSpan="8" className="px-6 py-12 text-center text-gray-500 text-sm">
+                      <td colSpan={readOnly ? "7" : "8"} className="px-6 py-12 text-center text-gray-500 text-sm">
                         <FileText size={48} className="mx-auto mb-3 text-gray-300" />
                         <p className="font-medium">No certificates found</p>
                         <p className="text-xs text-gray-400 mt-1">Try adjusting your search or filters</p>
@@ -924,20 +1002,22 @@ const CertificateManagementSystem = () => {
                             }
                           </button>
                         </td>
-                        <td className="w-10 px-2 py-3">
-                          <button 
-                            onClick={() => toggleSelectForDelivery(cert.id)} 
-                            disabled={cert.delivered}
-                            className={cert.delivered ? 'cursor-not-allowed' : 'hover:bg-green-100 p-1 rounded'}
-                          >
-                            {cert.delivered ? (
-                              <CheckSquare size={16} className="text-gray-300" />
-                            ) : selectedForDelivery.find(c => c.id === cert.id) ? 
-                              <CheckSquare size={16} className="text-green-600" /> : 
-                              <Square size={16} className="text-gray-400 group-hover:text-gray-600" />
-                            }
-                          </button>
-                        </td>
+                        {!readOnly && (
+                          <td className="w-10 px-2 py-3">
+                            <button 
+                              onClick={() => toggleSelectForDelivery(cert.id)} 
+                              disabled={cert.delivered}
+                              className={cert.delivered ? 'cursor-not-allowed' : 'hover:bg-green-100 p-1 rounded'}
+                            >
+                              {cert.delivered ? (
+                                <CheckSquare size={16} className="text-gray-300" />
+                              ) : selectedForDelivery.find(c => c.id === cert.id) ? 
+                                <CheckSquare size={16} className="text-green-600" /> : 
+                                <Square size={16} className="text-gray-400 group-hover:text-gray-600" />
+                              }
+                            </button>
+                          </td>
+                        )}
                         <td className="w-28 px-3 py-3 text-xs font-medium text-gray-900">
                           <div className="truncate" title={cert.no}>{cert.no}</div>
                         </td>
@@ -959,15 +1039,17 @@ const CertificateManagementSystem = () => {
                         </td>
                         <td className="w-32 px-3 py-3">
                           <div className="flex gap-1 flex-wrap">
-                            <button
-                              onClick={() => handleEditCertificate(cert)}
-                              disabled={loading}
-                              className="bg-yellow-500 text-white p-1.5 rounded hover:bg-yellow-600 transition-colors shadow-sm hover:shadow disabled:opacity-50"
-                              title="Edit Certificate"
-                            >
-                              <Edit size={12} />
-                            </button>
-                            {!cert.delivered ? (
+                            {!readOnly && (
+                              <button
+                                onClick={() => handleEditCertificate(cert)}
+                                disabled={loading}
+                                className="bg-yellow-500 text-white p-1.5 rounded hover:bg-yellow-600 transition-colors shadow-sm hover:shadow disabled:opacity-50"
+                                title="Edit Certificate"
+                              >
+                                <Edit size={12} />
+                              </button>
+                            )}
+                            {!readOnly && !cert.delivered && (
                               <button
                                 onClick={() => handleDelivery(cert)}
                                 disabled={loading}
@@ -976,7 +1058,8 @@ const CertificateManagementSystem = () => {
                               >
                                 <Check size={12} />
                               </button>
-                            ) : (
+                            )}
+                            {!readOnly && cert.delivered && (
                               <button
                                 onClick={() => handleUndoDelivery(cert)}
                                 disabled={loading}
@@ -993,17 +1076,19 @@ const CertificateManagementSystem = () => {
                             >
                               <Printer size={12} />
                             </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteCertificate(cert);
-                              }}
-                              disabled={loading}
-                              className="bg-red-600 text-white p-1.5 rounded hover:bg-red-700 transition-colors shadow-sm hover:shadow disabled:opacity-50"
-                              title="Delete Certificate"
-                            >
-                              <Trash2 size={12} />
-                            </button>
+                            {allowDelete && !readOnly && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteCertificate(cert);
+                                }}
+                                disabled={loading}
+                                className="bg-red-600 text-white p-1.5 rounded hover:bg-red-700 transition-colors shadow-sm hover:shadow disabled:opacity-50"
+                                title="Delete Certificate"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -1094,7 +1179,6 @@ const CertificateManagementSystem = () => {
           </div>
         </div>
 
-        {/* Form Modals - باقي الكود كما هو */}
         {showForm && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-xl p-4 sm:p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -1338,7 +1422,6 @@ const CertificateManagementSystem = () => {
   );
 };
 
-// Print Components - نفس الكود السابق
 const SingleCertificatePrint = ({ cert, index, total }) => (
   <div className="p-12 bg-white" style={{ pageBreakAfter: 'always' }}>
     <div className="flex items-center justify-between mb-6">
