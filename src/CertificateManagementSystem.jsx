@@ -492,66 +492,82 @@ const checkSerialNoExists = async (serialNo, currentCertId = null) => {
   };
 
   const handleImportExcel = async (event) => {
-    if (readOnly) {
-      alert('You do not have permission to add');
-      event.target.value = '';
-      return;
-    }
+  if (readOnly) {
+    alert('You do not have permission to add');
+    event.target.value = '';
+    return;
+  }
 
-    const file = event.target.files[0];
-    if (!file) return;
+  const file = event.target.files[0];
+  if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      try {
-        setLoading(true);
-        const text = e.target.result;
-        const lines = text.split('\n');
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try {
+      setLoading(true);
+      const text = e.target.result;
+      const lines = text.split('\n');
+      
+      if (lines.length < 2) {
+        alert('File is empty or invalid');
+        return;
+      }
+
+      const headers = lines[0].split(',').map(h => h.replace(/"/g, '').trim());
+      
+      const noIndex = headers.findIndex(h => h.toLowerCase().includes('certificate') || h.toLowerCase().includes('no'));
+      const descIndex = headers.findIndex(h => h.toLowerCase().includes('description'));
+      
+      if (noIndex === -1 || descIndex === -1) {
+        alert('File must have "Certificate No." and "Description" columns');
+        return;
+      }
+
+      const partIndex = headers.findIndex(h => h.toLowerCase().includes('part'));
+      const serialIndex = headers.findIndex(h => h.toLowerCase().includes('serial'));
+      const statusIndex = headers.findIndex(h => h.toLowerCase().includes('status'));
+
+      const importedCerts = [];
+      const duplicates = [];
+      const errors = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        if (!lines[i].trim()) continue;
         
-        if (lines.length < 2) {
-          alert('File is empty or invalid');
-          return;
-        }
-
-        const headers = lines[0].split(',').map(h => h.replace(/"/g, '').trim());
+        const cells = lines[i].split(',').map(c => c.replace(/"/g, '').trim());
         
-        const noIndex = headers.findIndex(h => h.toLowerCase().includes('certificate') || h.toLowerCase().includes('no'));
-        const descIndex = headers.findIndex(h => h.toLowerCase().includes('description'));
-        
-        if (noIndex === -1 || descIndex === -1) {
-          alert('File must have "Certificate No." and "Description" columns');
-          return;
-        }
-
-        const partIndex = headers.findIndex(h => h.toLowerCase().includes('part'));
-        const serialIndex = headers.findIndex(h => h.toLowerCase().includes('serial'));
-        const statusIndex = headers.findIndex(h => h.toLowerCase().includes('status'));
-
-        const importedCerts = [];
-        for (let i = 1; i < lines.length; i++) {
-          if (!lines[i].trim()) continue;
+        if (cells[noIndex] && cells[descIndex]) {
+          const serialNo = serialIndex !== -1 ? cells[serialIndex] : '';
           
-          const cells = lines[i].split(',').map(c => c.replace(/"/g, '').trim());
-          
-          if (cells[noIndex] && cells[descIndex]) {
-            importedCerts.push({
-              no: cells[noIndex],
-              description: cells[descIndex],
-              part_no: partIndex !== -1 ? cells[partIndex] : '',
-              serial_no: serialIndex !== -1 ? cells[serialIndex] : '',
-             status: statusIndex !== -1 && cells[statusIndex] ? cells[statusIndex] : 'Original',
-              created_date: new Date().toISOString().split('T')[0],
-              delivered: false,
-              delivery_info: null
-            });
+          if (serialNo && serialNo.trim() !== '') {
+            const exists = await checkSerialNoExists(serialNo);
+            
+            if (exists) {
+              duplicates.push({
+                row: i + 1,
+                certNo: cells[noIndex],
+                serialNo: serialNo
+              });
+              continue;
+            }
           }
-        }
 
-        if (importedCerts.length === 0) {
-          alert('No valid certificates found in the file');
-          return;
+          importedCerts.push({
+            no: cells[noIndex],
+            description: cells[descIndex],
+            part_no: partIndex !== -1 ? cells[partIndex] : '',
+            serial_no: serialNo,
+            status: statusIndex !== -1 && cells[statusIndex] ? cells[statusIndex] : 'Original',
+            created_date: new Date().toISOString().split('T')[0],
+            delivered: false,
+            delivery_info: null
+          });
         }
+      }
 
+      let message = '';
+      
+      if (importedCerts.length > 0) {
         const { error } = await supabase
           .from('certificates')
           .insert(importedCerts);
@@ -559,20 +575,34 @@ const checkSerialNoExists = async (serialNo, currentCertId = null) => {
         if (error) throw error;
 
         await loadCertificates();
-        setShowImportModal(false);
-        alert(`Successfully imported ${importedCerts.length} certificate(s)!`);
-        
-        event.target.value = '';
-      } catch (error) {
-        alert('Error importing data: ' + error.message);
-        console.error(error);
-      } finally {
-        setLoading(false);
+        message += `✅ Successfully imported ${importedCerts.length} certificate(s)!\n`;
+      } else {
+        message += '⚠️ No new certificates to import.\n';
       }
-    };
-    
-    reader.readAsText(file);
+
+      if (duplicates.length > 0) {
+        message += `\n⚠️ Skipped ${duplicates.length} duplicate(s):\n`;
+        duplicates.slice(0, 5).forEach(dup => {
+          message += `- Row ${dup.row}: ${dup.certNo} (Serial: ${dup.serialNo})\n`;
+        });
+        if (duplicates.length > 5) {
+          message += `... and ${duplicates.length - 5} more\n`;
+        }
+      }
+
+      alert(message);
+      setShowImportModal(false);
+      event.target.value = '';
+    } catch (error) {
+      alert('Error importing data: ' + error.message);
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
   };
+  
+  reader.readAsText(file);
+};
 
   const downloadTemplate = () => {
     const headers = ['Certificate No.', 'Description', 'Part No.', 'Serial No.', 'Status'];
