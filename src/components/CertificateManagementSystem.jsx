@@ -25,7 +25,7 @@ const CertificateManagementSystem = ({ readOnly = false, allowDelete = true }) =
     description: '',
     partNo: '',
     serialNo: '',
-    status: 'New'
+    status: 'Original'
   });
 
   const [deliveryData, setDeliveryData] = useState({
@@ -87,10 +87,10 @@ const CertificateManagementSystem = ({ readOnly = false, allowDelete = true }) =
     return;
   }
 
-  if (!formData.no || !formData.description) {
-    alert('Please enter at least Number and Description');
-    return;
-  }
+  if (!formData.no || !formData.description || !formData.partNo || !formData.serialNo || !formData.status) {
+  alert('All fields are required! Please fill in: Certificate No., Description, Part No., Serial No., and Status');
+  return;
+}
 
   // Check for duplicate Serial No
   if (formData.serialNo && formData.serialNo.trim() !== '') {
@@ -159,7 +159,7 @@ const CertificateManagementSystem = ({ readOnly = false, allowDelete = true }) =
       description: '',
       partNo: '',
       serialNo: '',
-      status: 'New'
+      status: 'Original'
     });
     setShowForm(false);
     setEditMode(false);
@@ -539,7 +539,7 @@ const checkSerialNoExists = async (serialNo, currentCertId = null) => {
               description: cells[descIndex],
               part_no: partIndex !== -1 ? cells[partIndex] : '',
               serial_no: serialIndex !== -1 ? cells[serialIndex] : '',
-              status: statusIndex !== -1 && cells[statusIndex] ? cells[statusIndex] : 'New',
+             status: statusIndex !== -1 && cells[statusIndex] ? cells[statusIndex] : 'Original',
               created_date: new Date().toISOString().split('T')[0],
               delivered: false,
               delivery_info: null
@@ -576,10 +576,10 @@ const checkSerialNoExists = async (serialNo, currentCertId = null) => {
 
   const downloadTemplate = () => {
     const headers = ['Certificate No.', 'Description', 'Part No.', 'Serial No.', 'Status'];
-    const sampleData = [
-      ['CERT-001', 'Sample Certificate Description', 'PART-123', 'SN-456789', 'New'],
-      ['CERT-002', 'Another Sample Certificate', 'PART-124', 'SN-456790', 'Active']
-    ];
+   const sampleData = [
+  ['CERT-001', 'Sample Certificate Description', 'PART-123', 'SN-456789', 'Original'],
+  ['CERT-002', 'Another Sample Certificate', 'PART-124', 'SN-456790', 'Copy']
+];
 
     let csv = headers.join(',') + '\n';
     sampleData.forEach(row => {
@@ -761,7 +761,7 @@ const checkSerialNoExists = async (serialNo, currentCertId = null) => {
                         description: '',
                         partNo: '',
                         serialNo: '',
-                        status: 'New'
+                        status: 'Original'
                       });
                       setShowForm(true);
                     }}
@@ -1196,16 +1196,19 @@ const checkSerialNoExists = async (serialNo, currentCertId = null) => {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs sm:text-sm font-medium mb-2">Status</label>
-                  <input
-                    type="text"
-                    value={formData.status}
-                    onChange={(e) => setFormData({...formData, status: e.target.value})}
-                    className="w-full px-3 sm:px-4 py-2 border rounded-lg text-sm"
-                  />
-                </div>
+  <label className="block text-xs sm:text-sm font-medium mb-2">Status *</label>
+  <select
+    value={formData.status}
+    onChange={(e) => setFormData({...formData, status: e.target.value})}
+    className="w-full px-3 sm:px-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+    required
+  >
+    <option value="Original">Original</option>
+    <option value="Copy">Copy</option>
+  </select>
+</div>
                 <div className="col-span-1 sm:col-span-2">
-                  <label className="block text-xs sm:text-sm font-medium mb-2">Description *</label>
+                  <label className="block text-xs sm:text-sm font-medium mb-2">Description*</label>
                   <input
                     type="text"
                     value={formData.description}
@@ -1214,7 +1217,7 @@ const checkSerialNoExists = async (serialNo, currentCertId = null) => {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs sm:text-sm font-medium mb-2">Part No.</label>
+                  <label className="block text-xs sm:text-sm font-medium mb-2">Part No.*</label>
                   <input
                     type="text"
                     value={formData.partNo}
@@ -1223,7 +1226,7 @@ const checkSerialNoExists = async (serialNo, currentCertId = null) => {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs sm:text-sm font-medium mb-2">Serial No.</label>
+                  <label className="block text-xs sm:text-sm font-medium mb-2">Serial No.*</label>
                   <input
                     type="text"
                     value={formData.serialNo}
@@ -1379,9 +1382,9 @@ const checkSerialNoExists = async (serialNo, currentCertId = null) => {
                 <ul className="text-xs sm:text-sm space-y-1">
                   <li>• Certificate No. (Required)</li>
                   <li>• Description (Required)</li>
-                  <li>• Part No. (Optional)</li>
-                  <li>• Serial No. (Optional)</li>
-                  <li>• Status (Optional)</li>
+                  <li>• Part No. (Required)</li>
+                  <li>• Serial No. (Required)</li>
+                  <li>• Status (Required)</li>
                 </ul>
               </div>
 
