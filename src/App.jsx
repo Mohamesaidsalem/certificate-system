@@ -200,24 +200,6 @@ const LoginPage = () => {
               )}
             </button>
           </form>
-
-          {/* Users Info */}
-          <div className="mt-4 bg-gray-50 rounded-lg p-4">
-            <p className="text-xs font-semibold text-gray-700 mb-2">
-              Login Credentials:
-            </p>
-            <div className="space-y-1 text-xs text-gray-600">
-              <p>
-                <strong>Admin:</strong> admin / admin123
-              </p>
-              <p>
-                <strong>Viewer:</strong> viewer / viewer123
-              </p>
-              <p>
-                <strong>Cert Only:</strong> cert / cert123
-              </p>
-            </div>
-          </div>
         </div>
 
         {/* Footer */}
