@@ -1362,252 +1362,300 @@ const CertificateManagementSystem = ({ readOnly = false, allowDelete = true }) =
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-md overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full table-fixed">
-                <thead className="bg-gradient-to-r from-gray-50 to-gray-100 border-b-2 border-gray-300">
-                  <tr>
-                    <th className="w-10 px-2 py-3 text-left">
-                      <button onClick={selectAllForPrint} title="Select for Print" className="hover:bg-blue-50 p-1 rounded">
-                        {selectedForPrint.length === filteredCertificates.length && filteredCertificates.length > 0 ? 
-                          <CheckSquare size={16} className="text-blue-600" /> : <Square size={16} />
-                        }
-                      </button>
-                    </th>
-                    {!readOnly && (
-                      <th className="w-10 px-2 py-3 text-left">
-                        <button onClick={selectAllForDelivery} title="Select for Delivery" className="hover:bg-green-50 p-1 rounded">
-                          {selectedForDelivery.length === filteredCertificates.filter(c => !c.delivered).length && filteredCertificates.filter(c => !c.delivered).length > 0 ? 
-                            <CheckSquare size={16} className="text-green-600" /> : <Square size={16} />
-                          }
-                        </button>
-                      </th>
-                    )}
-                    {!readOnly && allowDelete && (
-                      <th className="w-10 px-2 py-3 text-left">
-                        <button onClick={selectAllForDelete} title="Select for Delete" className="hover:bg-red-50 p-1 rounded">
-                          {selectedForDelete.length === filteredCertificates.length && filteredCertificates.length > 0 ? 
-                            <CheckSquare size={16} className="text-red-600" /> : <Square size={16} />
-                          }
-                        </button>
-                      </th>
-                    )}
-                    <th className="w-28 px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">No.</th>
-                    <th className="w-48 px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider hidden md:table-cell">Description</th>
-                    <th className="w-28 px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider hidden lg:table-cell">Part No.</th>
-                    <th className="w-28 px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider hidden xl:table-cell">Serial No.</th>
-                    <th className="w-24 px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Status</th>
-                    <th className="w-32 px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {paginatedCertificates.length === 0 ? (
-                    <tr>
-                      <td colSpan={readOnly ? (allowDelete ? "8" : "7") : (allowDelete ? "9" : "8")} className="px-6 py-12 text-center text-gray-500 text-sm">
-                        <FileText size={48} className="mx-auto mb-3 text-gray-300" />
-                        <p className="font-medium">No certificates found</p>
-                        <p className="text-xs text-gray-400 mt-1">Try adjusting your search or filters</p>
-                      </td>
-                    </tr>
-                  ) : (
-                    paginatedCertificates.map(cert => (
-                      <tr key={cert.id} className="hover:bg-blue-50 transition-colors group">
-                        <td className="w-10 px-2 py-3">
-                          <button onClick={() => toggleSelectForPrint(cert.id)} className="hover:bg-blue-100 p-1 rounded">
-                            {selectedForPrint.find(c => c.id === cert.id) ? 
-                              <CheckSquare size={16} className="text-blue-600" /> : 
-                              <Square size={16} className="text-gray-400 group-hover:text-gray-600" />
-                            }
-                          </button>
-                        </td>
-                        {!readOnly && (
-                          <td className="w-10 px-2 py-3">
-                            <button 
-                              onClick={() => toggleSelectForDelivery(cert.id)} 
-                              disabled={cert.delivered}
-                              className={cert.delivered ? 'cursor-not-allowed' : 'hover:bg-green-100 p-1 rounded'}
-                            >
-                              {cert.delivered ? (
-                                <CheckSquare size={16} className="text-gray-300" />
-                              ) : selectedForDelivery.find(c => c.id === cert.id) ? 
-                                <CheckSquare size={16} className="text-green-600" /> : 
-                                <Square size={16} className="text-gray-400 group-hover:text-gray-600" />
-                              }
-                            </button>
-                          </td>
-                        )}
-                        {!readOnly && allowDelete && (
-                          <td className="w-10 px-2 py-3">
-                            <button 
-                              onClick={() => toggleSelectForDelete(cert.id)} 
-                              className="hover:bg-red-100 p-1 rounded"
-                            >
-                              {selectedForDelete.find(c => c.id === cert.id) ? 
-                                <CheckSquare size={16} className="text-red-600" /> : 
-                                <Square size={16} className="text-gray-400 group-hover:text-gray-600" />
-                              }
-                            </button>
-                          </td>
-                        )}
-                        <td className="w-28 px-3 py-3 text-xs font-medium text-gray-900">
-                          <div className="truncate" title={cert.no}>{cert.no}</div>
-                        </td>
-                        <td className="w-48 px-3 py-3 text-xs text-gray-700 hidden md:table-cell">
-                          <div className="line-clamp-2" title={cert.description}>
-                            {cert.description}
-                          </div>
-                        </td>
-                        <td className="w-28 px-3 py-3 text-xs text-gray-700 hidden lg:table-cell">
-                          <div className="truncate" title={cert.partNo || '-'}>{cert.partNo || '-'}</div>
-                        </td>
-                        <td className="w-28 px-3 py-3 text-xs text-gray-700 hidden xl:table-cell">
-                          <div className="truncate" title={cert.serialNo || '-'}>{cert.serialNo || '-'}</div>
-                        </td>
-                        <td className="w-24 px-3 py-3">
-                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 truncate max-w-full" title={cert.status}>
-                            {cert.status}
-                          </span>
-                        </td>
-                        <td className="w-32 px-3 py-3">
-                          <div className="flex gap-1 flex-wrap">
-                            {!readOnly && (
-                              <button
-                                onClick={() => handleEditCertificate(cert)}
-                                disabled={loading}
-                                className="bg-yellow-500 text-white p-1.5 rounded hover:bg-yellow-600 transition-colors shadow-sm hover:shadow disabled:opacity-50"
-                                title="Edit Certificate"
-                              >
-                                <Edit size={12} />
-                              </button>
-                            )}
-                            {!readOnly && !cert.delivered && (
-                              <button
-                                onClick={() => handleDelivery(cert)}
-                                disabled={loading}
-                                className="bg-green-600 text-white p-1.5 rounded hover:bg-green-700 transition-colors shadow-sm hover:shadow disabled:opacity-50"
-                                title="Mark as Delivered"
-                              >
-                                <Check size={12} />
-                              </button>
-                            )}
-                            {!readOnly && cert.delivered && (
-                              <button
-                                onClick={() => handleUndoDelivery(cert)}
-                                disabled={loading}
-                                className="bg-orange-500 text-white p-1.5 rounded hover:bg-orange-600 transition-colors shadow-sm hover:shadow disabled:opacity-50"
-                                title="Undo Delivery"
-                              >
-                                <RotateCcw size={12} />
-                              </button>
-                            )}
-                            <button
-                              onClick={() => handlePrintSingle(cert)}
-                              className="bg-blue-600 text-white p-1.5 rounded hover:bg-blue-700 transition-colors shadow-sm hover:shadow"
-                              title="Print Certificate"
-                            >
-                              <Printer size={12} />
-                            </button>
-                            {allowDelete && !readOnly && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeleteCertificate(cert);
-                                }}
-                                disabled={loading}
-                                className="bg-red-600 text-white p-1.5 rounded hover:bg-red-700 transition-colors shadow-sm hover:shadow disabled:opacity-50"
-                                title="Delete Certificate"
-                              >
-                                <Trash2 size={12} />
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-            {filteredCertificates.length > 0 && (
-              <div className="bg-gray-50 px-4 py-3 border-t border-gray-200 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <p className="text-xs text-gray-600">
-                    Showing <strong>{startIndex + 1}</strong> to <strong>{Math.min(endIndex, filteredCertificates.length)}</strong> of <strong>{filteredCertificates.length}</strong> results
-                    {filteredCertificates.length !== certificates.length && (
-                      <span className="text-gray-400"> (filtered from {certificates.length})</span>
-                    )}
-                  </p>
+         <div className="bg-white rounded-lg shadow-md overflow-hidden">
+  <div className="overflow-x-auto">
+    <table className="w-full table-fixed">
+      <thead className="bg-gradient-to-r from-gray-50 to-gray-100 border-b-2 border-gray-300">
+        <tr>
+          <th className="w-10 px-2 py-3 text-left">
+            <button onClick={selectAllForPrint} title="Select for Print" className="hover:bg-blue-50 p-1 rounded">
+              {selectedForPrint.length === filteredCertificates.length && filteredCertificates.length > 0 ? 
+                <CheckSquare size={16} className="text-blue-600" /> : <Square size={16} />
+              }
+            </button>
+          </th>
+          {!readOnly && (
+            <th className="w-10 px-2 py-3 text-left">
+              <button onClick={selectAllForDelivery} title="Select for Delivery" className="hover:bg-green-50 p-1 rounded">
+                {selectedForDelivery.length === filteredCertificates.filter(c => !c.delivered).length && filteredCertificates.filter(c => !c.delivered).length > 0 ? 
+                  <CheckSquare size={16} className="text-green-600" /> : <Square size={16} />
+                }
+              </button>
+            </th>
+          )}
+          {!readOnly && allowDelete && (
+            <th className="w-10 px-2 py-3 text-left">
+              <button onClick={selectAllForDelete} title="Select for Delete" className="hover:bg-red-50 p-1 rounded">
+                {selectedForDelete.length === filteredCertificates.length && filteredCertificates.length > 0 ? 
+                  <CheckSquare size={16} className="text-red-600" /> : <Square size={16} />
+                }
+              </button>
+            </th>
+          )}
+          {/* ⭐ عمود No. صغير */}
+          <th className="w-16 px-2 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">No.</th>
+          
+          <th className="w-48 px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider hidden md:table-cell">Description</th>
+          <th className="w-28 px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider hidden lg:table-cell">Part No.</th>
+          <th className="w-28 px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider hidden xl:table-cell">Serial No.</th>
+          <th className="w-20 px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Status</th>
+          
+          {/* ⭐ عمود Delivered جديد */}
+          <th className="w-24 px-3 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">Delivered</th>
+          
+          <th className="w-32 px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
+        </tr>
+      </thead>
+      <tbody className="bg-white divide-y divide-gray-200">
+        {paginatedCertificates.length === 0 ? (
+          <tr>
+            <td colSpan={readOnly ? (allowDelete ? "9" : "8") : (allowDelete ? "10" : "9")} className="px-6 py-12 text-center text-gray-500 text-sm">
+              <FileText size={48} className="mx-auto mb-3 text-gray-300" />
+              <p className="font-medium">No certificates found</p>
+              <p className="text-xs text-gray-400 mt-1">Try adjusting your search or filters</p>
+            </td>
+          </tr>
+        ) : (
+          paginatedCertificates.map(cert => (
+            <tr key={cert.id} className="hover:bg-blue-50 transition-colors group">
+              {/* Print Checkbox */}
+              <td className="w-10 px-2 py-3">
+                <button onClick={() => toggleSelectForPrint(cert.id)} className="hover:bg-blue-100 p-1 rounded">
+                  {selectedForPrint.find(c => c.id === cert.id) ? 
+                    <CheckSquare size={16} className="text-blue-600" /> : 
+                    <Square size={16} className="text-gray-400 group-hover:text-gray-600" />
+                  }
+                </button>
+              </td>
+              
+              {/* Delivery Checkbox */}
+              {!readOnly && (
+                <td className="w-10 px-2 py-3">
+                  <button 
+                    onClick={() => toggleSelectForDelivery(cert.id)} 
+                    disabled={cert.delivered}
+                    className={cert.delivered ? 'cursor-not-allowed' : 'hover:bg-green-100 p-1 rounded'}
+                  >
+                    {cert.delivered ? (
+                      <CheckSquare size={16} className="text-gray-300" />
+                    ) : selectedForDelivery.find(c => c.id === cert.id) ? 
+                      <CheckSquare size={16} className="text-green-600" /> : 
+                      <Square size={16} className="text-gray-400 group-hover:text-gray-600" />
+                    }
+                  </button>
+                </td>
+              )}
+              
+              {/* Delete Checkbox */}
+              {!readOnly && allowDelete && (
+                <td className="w-10 px-2 py-3">
+                  <button 
+                    onClick={() => toggleSelectForDelete(cert.id)} 
+                    className="hover:bg-red-100 p-1 rounded"
+                  >
+                    {selectedForDelete.find(c => c.id === cert.id) ? 
+                      <CheckSquare size={16} className="text-red-600" /> : 
+                      <Square size={16} className="text-gray-400 group-hover:text-gray-600" />
+                    }
+                  </button>
+                </td>
+              )}
+              
+              {/* ⭐ No. - صغير */}
+              <td className="w-16 px-2 py-3 text-xs font-medium text-gray-900">
+                <div className="truncate" title={cert.no}>{cert.no}</div>
+              </td>
+              
+              {/* Description */}
+              <td className="w-48 px-3 py-3 text-xs text-gray-700 hidden md:table-cell">
+                <div className="line-clamp-2" title={cert.description}>
+                  {cert.description}
                 </div>
-                
-                {totalPages > 1 && (
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setCurrentPage(1)}
-                      disabled={currentPage === 1}
-                      className="px-2 py-1 border border-gray-300 rounded text-xs hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="First Page"
-                    >
-                      ««
-                    </button>
-                    <button
-                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                      disabled={currentPage === 1}
-                      className="px-2 py-1 border border-gray-300 rounded text-xs hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Previous Page"
-                    >
-                      «
-                    </button>
-                    
-                    <div className="flex items-center gap-1">
-                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                        let pageNum;
-                        if (totalPages <= 5) {
-                          pageNum = i + 1;
-                        } else if (currentPage <= 3) {
-                          pageNum = i + 1;
-                        } else if (currentPage >= totalPages - 2) {
-                          pageNum = totalPages - 4 + i;
-                        } else {
-                          pageNum = currentPage - 2 + i;
-                        }
-                        
-                        return (
-                          <button
-                            key={pageNum}
-                            onClick={() => setCurrentPage(pageNum)}
-                            className={`px-3 py-1 rounded text-xs font-medium ${
-                              currentPage === pageNum
-                                ? 'bg-blue-600 text-white'
-                                : 'border border-gray-300 hover:bg-gray-100'
-                            }`}
-                          >
-                            {pageNum}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    
-                    <button
-                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                      disabled={currentPage === totalPages}
-                      className="px-2 py-1 border border-gray-300 rounded text-xs hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Next Page"
-                    >
-                      »
-                    </button>
-                    <button
-                      onClick={() => setCurrentPage(totalPages)}
-                      disabled={currentPage === totalPages}
-                      className="px-2 py-1 border border-gray-300 rounded text-xs hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Last Page"
-                    >
-                      »»
-                    </button>
+              </td>
+              
+              {/* Part No */}
+              <td className="w-28 px-3 py-3 text-xs text-gray-700 hidden lg:table-cell">
+                <div className="truncate" title={cert.partNo || '-'}>{cert.partNo || '-'}</div>
+              </td>
+              
+              {/* Serial No */}
+              <td className="w-28 px-3 py-3 text-xs text-gray-700 hidden xl:table-cell">
+                <div className="truncate" title={cert.serialNo || '-'}>{cert.serialNo || '-'}</div>
+              </td>
+              
+              {/* Status */}
+              <td className="w-20 px-3 py-3">
+                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 truncate max-w-full" title={cert.status}>
+                  {cert.status}
+                </span>
+              </td>
+              
+              {/* ⭐ Delivered - عمود جديد */}
+              <td className="w-24 px-3 py-3 text-center">
+                {cert.delivered ? (
+                  <div className="flex flex-col items-center gap-1">
+                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                      ✓ Delivered
+                    </span>
+                    {cert.deliveryInfo?.receiverName && (
+                      <span className="text-xs text-gray-500 truncate max-w-full" title={cert.deliveryInfo.receiverName}>
+                        {cert.deliveryInfo.receiverName}
+                      </span>
+                    )}
+                    {cert.deliveryInfo?.deliveryDate && (
+                      <span className="text-xs text-gray-400">
+                        {cert.deliveryInfo.deliveryDate}
+                      </span>
+                    )}
                   </div>
+                ) : (
+                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                    ⏳ Pending
+                  </span>
                 )}
-              </div>
-            )}
+              </td>
+              
+              {/* Actions */}
+              <td className="w-32 px-3 py-3">
+                <div className="flex gap-1 flex-wrap">
+                  {!readOnly && (
+                    <button
+                      onClick={() => handleEditCertificate(cert)}
+                      disabled={loading}
+                      className="bg-yellow-500 text-white p-1.5 rounded hover:bg-yellow-600 transition-colors shadow-sm hover:shadow disabled:opacity-50"
+                      title="Edit Certificate"
+                    >
+                      <Edit size={12} />
+                    </button>
+                  )}
+                  {!readOnly && !cert.delivered && (
+                    <button
+                      onClick={() => handleDelivery(cert)}
+                      disabled={loading}
+                      className="bg-green-600 text-white p-1.5 rounded hover:bg-green-700 transition-colors shadow-sm hover:shadow disabled:opacity-50"
+                      title="Mark as Delivered"
+                    >
+                      <Check size={12} />
+                    </button>
+                  )}
+                  {!readOnly && cert.delivered && (
+                    <button
+                      onClick={() => handleUndoDelivery(cert)}
+                      disabled={loading}
+                      className="bg-orange-500 text-white p-1.5 rounded hover:bg-orange-600 transition-colors shadow-sm hover:shadow disabled:opacity-50"
+                      title="Undo Delivery"
+                    >
+                      <RotateCcw size={12} />
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handlePrintSingle(cert)}
+                    className="bg-blue-600 text-white p-1.5 rounded hover:bg-blue-700 transition-colors shadow-sm hover:shadow"
+                    title="Print Certificate"
+                  >
+                    <Printer size={12} />
+                  </button>
+                  {allowDelete && !readOnly && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteCertificate(cert);
+                      }}
+                      disabled={loading}
+                      className="bg-red-600 text-white p-1.5 rounded hover:bg-red-700 transition-colors shadow-sm hover:shadow disabled:opacity-50"
+                      title="Delete Certificate"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  )}
+                </div>
+              </td>
+            </tr>
+          ))
+        )}
+      </tbody>
+    </table>
+  </div>
+  {filteredCertificates.length > 0 && (
+    <div className="bg-gray-50 px-4 py-3 border-t border-gray-200 flex items-center justify-between">
+      <div className="flex items-center gap-4">
+        <p className="text-xs text-gray-600">
+          Showing <strong>{startIndex + 1}</strong> to <strong>{Math.min(endIndex, filteredCertificates.length)}</strong> of <strong>{filteredCertificates.length}</strong> results
+          {filteredCertificates.length !== certificates.length && (
+            <span className="text-gray-400"> (filtered from {certificates.length})</span>
+          )}
+        </p>
+      </div>
+      
+      {totalPages > 1 && (
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setCurrentPage(1)}
+            disabled={currentPage === 1}
+            className="px-2 py-1 border border-gray-300 rounded text-xs hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="First Page"
+          >
+            ««
+          </button>
+          <button
+            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
+            className="px-2 py-1 border border-gray-300 rounded text-xs hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Previous Page"
+          >
+            «
+          </button>
+          
+          <div className="flex items-center gap-1">
+            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+              let pageNum;
+              if (totalPages <= 5) {
+                pageNum = i + 1;
+              } else if (currentPage <= 3) {
+                pageNum = i + 1;
+              } else if (currentPage >= totalPages - 2) {
+                pageNum = totalPages - 4 + i;
+              } else {
+                pageNum = currentPage - 2 + i;
+              }
+              
+              return (
+                <button
+                  key={pageNum}
+                  onClick={() => setCurrentPage(pageNum)}
+                  className={`px-3 py-1 rounded text-xs font-medium ${
+                    currentPage === pageNum
+                      ? 'bg-blue-600 text-white'
+                      : 'border border-gray-300 hover:bg-gray-100'
+                  }`}
+                >
+                  {pageNum}
+                </button>
+              );
+            })}
           </div>
+          
+          <button
+            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+            disabled={currentPage === totalPages}
+            className="px-2 py-1 border border-gray-300 rounded text-xs hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Next Page"
+          >
+            »
+          </button>
+          <button
+            onClick={() => setCurrentPage(totalPages)}
+            disabled={currentPage === totalPages}
+            className="px-2 py-1 border border-gray-300 rounded text-xs hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Last Page"
+          >
+            »»
+          </button>
+        </div>
+      )}
+    </div>
+  )}
+</div>
         </div>
 
         {showForm && (
