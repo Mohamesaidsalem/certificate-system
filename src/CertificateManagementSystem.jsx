@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Printer, Plus, Check, X, FileText, Calendar, User, CheckSquare, Square, ChevronDown, Upload, Download, Edit, Trash2, RotateCcw, Plane } from 'lucide-react';
+import { Search, Printer, Plus, Check, X, FileText, Calendar, User, CheckSquare, Square, ChevronDown, Upload, Download, Edit, Trash2, RotateCcw, Plane, AlertCircle } from 'lucide-react';
 import { supabase } from "./supabaseClient";
 
 const CertificateManagementSystem = ({ readOnly = false, allowDelete = true }) => {
@@ -12,6 +12,7 @@ const CertificateManagementSystem = ({ readOnly = false, allowDelete = true }) =
   const [filterStatus, setFilterStatus] = useState('all');
   const [selectedForPrint, setSelectedForPrint] = useState([]);
   const [selectedForDelivery, setSelectedForDelivery] = useState([]);
+  const [selectedForDelete, setSelectedForDelete] = useState([]);
   const [printMode, setPrintMode] = useState('');
   const [showPrintMenu, setShowPrintMenu] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -19,6 +20,16 @@ const CertificateManagementSystem = ({ readOnly = false, allowDelete = true }) =
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [loading, setLoading] = useState(false);
+  const [deleteProgress, setDeleteProgress] = useState({ current: 0, total: 0, show: false });
+  const [importProgress, setImportProgress] = useState({
+  show: false,
+  current: 0,
+  total: 0,
+  status: '',
+  details: [],
+  duplicates: [],
+  errors: []
+});
 
   const [formData, setFormData] = useState({
     no: '',
@@ -82,121 +93,122 @@ const CertificateManagementSystem = ({ readOnly = false, allowDelete = true }) =
   };
 
   const handleAddCertificate = async () => {
-  if (readOnly) {
-    alert('You do not have permission to edit');
-    return;
-  }
-
-  if (!formData.no || !formData.description || !formData.partNo || !formData.serialNo || !formData.status) {
-  alert('All fields are required! Please fill in: Certificate No., Description, Part No., Serial No., and Status');
-  return;
-}
-
-  // Check for duplicate Serial No
-  if (formData.serialNo && formData.serialNo.trim() !== '') {
-    const serialExists = await checkSerialNoExists(
-      formData.serialNo,
-      editMode ? selectedCert.id : null
-    );
-
-    if (serialExists) {
-      alert('⚠️ This Serial Number already exists! Please use a different Serial Number.');
+    if (readOnly) {
+      alert('You do not have permission to edit');
       return;
     }
-  }
 
-  try {
-    setLoading(true);
-
-    if (editMode && selectedCert) {
-      const { error } = await supabase
-        .from('certificates')
-        .update({
-          no: formData.no,
-          description: formData.description,
-          part_no: formData.partNo,
-          serial_no: formData.serialNo,
-          status: formData.status
-        })
-        .eq('id', selectedCert.id);
-
-      if (error) {
-        if (error.code === '23505') {
-          alert('⚠️ This Serial Number already exists!');
-          return;
-        }
-        throw error;
-      }
-      alert('Certificate updated successfully');
-    } else {
-      const { error } = await supabase
-        .from('certificates')
-        .insert([{
-          no: formData.no,
-          description: formData.description,
-          part_no: formData.partNo,
-          serial_no: formData.serialNo,
-          status: formData.status,
-          created_date: new Date().toISOString().split('T')[0],
-          delivered: false,
-          delivery_info: null
-        }]);
-
-      if (error) {
-        if (error.code === '23505') {
-          alert('⚠️ This Serial Number already exists!');
-          return;
-        }
-        throw error;
-      }
-      alert('Certificate added successfully');
+    if (!formData.no || !formData.description || !formData.partNo || !formData.serialNo || !formData.status) {
+      alert('All fields are required! Please fill in: Certificate No., Description, Part No., Serial No., and Status');
+      return;
     }
 
-    await loadCertificates();
-    
-    setFormData({
-      no: '',
-      description: '',
-      partNo: '',
-      serialNo: '',
-      status: 'Original'
-    });
-    setShowForm(false);
-    setEditMode(false);
-    setSelectedCert(null);
-  } catch (error) {
-    console.error('Error saving certificate:', error);
-    alert('Error saving certificate: ' + error.message);
-  } finally {
-    setLoading(false);
-  }
-};
-// Check if Serial No already exists
-const checkSerialNoExists = async (serialNo, currentCertId = null) => {
-  if (!serialNo || serialNo.trim() === '') {
-    return false;
-  }
+    // Check for duplicate Serial No
+    if (formData.serialNo && formData.serialNo.trim() !== '') {
+      const serialExists = await checkSerialNoExists(
+        formData.serialNo,
+        editMode ? selectedCert.id : null
+      );
 
-  try {
-    let query = supabase
-      .from('certificates')
-      .select('id, no')
-      .eq('serial_no', serialNo.trim());
-
-    if (currentCertId) {
-      query = query.neq('id', currentCertId);
+      if (serialExists) {
+        alert('⚠️ This Serial Number already exists! Please use a different Serial Number.');
+        return;
+      }
     }
 
-    const { data, error } = await query;
+    try {
+      setLoading(true);
 
-    if (error) throw error;
+      if (editMode && selectedCert) {
+        const { error } = await supabase
+          .from('certificates')
+          .update({
+            no: formData.no,
+            description: formData.description,
+            part_no: formData.partNo,
+            serial_no: formData.serialNo,
+            status: formData.status
+          })
+          .eq('id', selectedCert.id);
 
-    return data && data.length > 0;
-  } catch (error) {
-    console.error('Error checking serial number:', error);
-    return false;
-  }
-};
+        if (error) {
+          if (error.code === '23505') {
+            alert('⚠️ This Serial Number already exists!');
+            return;
+          }
+          throw error;
+        }
+        alert('Certificate updated successfully');
+      } else {
+        const { error } = await supabase
+          .from('certificates')
+          .insert([{
+            no: formData.no,
+            description: formData.description,
+            part_no: formData.partNo,
+            serial_no: formData.serialNo,
+            status: formData.status,
+            created_date: new Date().toISOString().split('T')[0],
+            delivered: false,
+            delivery_info: null
+          }]);
+
+        if (error) {
+          if (error.code === '23505') {
+            alert('⚠️ This Serial Number already exists!');
+            return;
+          }
+          throw error;
+        }
+        alert('Certificate added successfully');
+      }
+
+      await loadCertificates();
+      
+      setFormData({
+        no: '',
+        description: '',
+        partNo: '',
+        serialNo: '',
+        status: 'Original'
+      });
+      setShowForm(false);
+      setEditMode(false);
+      setSelectedCert(null);
+    } catch (error) {
+      console.error('Error saving certificate:', error);
+      alert('Error saving certificate: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Check if Serial No already exists
+  const checkSerialNoExists = async (serialNo, currentCertId = null) => {
+    if (!serialNo || serialNo.trim() === '') {
+      return false;
+    }
+
+    try {
+      let query = supabase
+        .from('certificates')
+        .select('id, no')
+        .eq('serial_no', serialNo.trim());
+
+      if (currentCertId) {
+        query = query.neq('id', currentCertId);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      return data && data.length > 0;
+    } catch (error) {
+      console.error('Error checking serial number:', error);
+      return false;
+    }
+  };
 
   const handleEditCertificate = (cert) => {
     if (readOnly) {
@@ -235,6 +247,7 @@ const checkSerialNoExists = async (serialNo, currentCertId = null) => {
         await loadCertificates();
         setSelectedForPrint(prev => prev.filter(c => c.id !== cert.id));
         setSelectedForDelivery(prev => prev.filter(c => c.id !== cert.id));
+        setSelectedForDelete(prev => prev.filter(c => c.id !== cert.id));
         alert('Certificate deleted successfully!');
       } catch (error) {
         console.error('Error deleting certificate:', error);
@@ -242,6 +255,135 @@ const checkSerialNoExists = async (serialNo, currentCertId = null) => {
       } finally {
         setLoading(false);
       }
+    }
+  };
+
+  const handleBulkDelete = async () => {
+  if (readOnly || !allowDelete) {
+    alert('You do not have permission to delete');
+    return;
+  }
+
+  if (selectedForDelete.length === 0) {
+    alert('Please select certificates to delete');
+    return;
+  }
+
+  const confirmMessage = `Are you sure you want to delete ${selectedForDelete.length} certificate(s)?\n\n` +
+    selectedForDelete.slice(0, 10).map(cert => `- ${cert.no}`).join('\n') +
+    (selectedForDelete.length > 10 ? `\n... and ${selectedForDelete.length - 10} more` : '');
+
+  if (window.confirm(confirmMessage)) {
+    try {
+      setLoading(true);
+      const ids = selectedForDelete.map(c => c.id);
+      
+      // ⭐ إظهار Progress Bar
+      setDeleteProgress({ current: 0, total: ids.length, show: true });
+
+      // تقسيم إلى دفعات (50 شهادة في كل دفعة)
+      const BATCH_SIZE = 50;
+      const batches = [];
+      for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+        batches.push(ids.slice(i, i + BATCH_SIZE));
+      }
+
+      let deletedCount = 0;
+      let failedCount = 0;
+
+      // حذف كل دفعة
+      for (let i = 0; i < batches.length; i++) {
+        const batch = batches[i];
+
+        try {
+          const { error } = await supabase
+            .from('certificates')
+            .delete()
+            .in('id', batch);
+
+          if (error) {
+            // إذا فشلت الدفعة، احذف واحدة واحدة
+            for (const id of batch) {
+              const { error: singleError } = await supabase
+                .from('certificates')
+                .delete()
+                .eq('id', id);
+              
+              if (!singleError) {
+                deletedCount++;
+              } else {
+                failedCount++;
+              }
+              
+              // ⭐ تحديث Progress
+              setDeleteProgress({ 
+                current: deletedCount + failedCount, 
+                total: ids.length, 
+                show: true 
+              });
+            }
+          } else {
+            deletedCount += batch.length;
+            
+            // ⭐ تحديث Progress
+            setDeleteProgress({ 
+              current: deletedCount + failedCount, 
+              total: ids.length, 
+              show: true 
+            });
+          }
+        } catch (err) {
+          console.error(`Batch ${i + 1} error:`, err);
+          failedCount += batch.length;
+        }
+
+        // تأخير صغير بين الدفعات لتجنب Rate Limiting
+        if (i < batches.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      }
+
+      await loadCertificates();
+      setSelectedForDelete([]);
+      setSelectedForPrint(prev => prev.filter(c => !ids.includes(c.id)));
+      setSelectedForDelivery(prev => prev.filter(c => !ids.includes(c.id)));
+      
+      // ⭐ إخفاء Progress Bar
+      setDeleteProgress({ current: 0, total: 0, show: false });
+
+      if (failedCount === 0) {
+        alert(`✅ Successfully deleted all ${deletedCount} certificate(s)!`);
+      } else {
+        alert(`⚠️ Deleted ${deletedCount} certificate(s).\nFailed: ${failedCount}`);
+      }
+
+    } catch (error) {
+      console.error('Error deleting certificates:', error);
+      alert('Error deleting certificates: ' + error.message);
+      setDeleteProgress({ current: 0, total: 0, show: false });
+    } finally {
+      setLoading(false);
+    }
+  }
+};
+
+  const toggleSelectForDelete = (certId) => {
+    setSelectedForDelete(prev => {
+      const cert = certificates.find(c => c.id === certId);
+      if (prev.find(c => c.id === certId)) {
+        return prev.filter(c => c.id !== certId);
+      } else {
+        return [...prev, cert];
+      }
+    });
+  };
+
+  const selectAllForDelete = () => {
+    const filtered = filteredCertificates;
+    if (selectedForDelete.length === filtered.length && filtered.length > 0) {
+      setSelectedForDelete([]);
+    } else {
+      setSelectedForDelete([...filtered]);
     }
   };
 
@@ -384,7 +526,7 @@ const checkSerialNoExists = async (serialNo, currentCertId = null) => {
 
   const selectAllForDelivery = () => {
     const undelivered = filteredCertificates.filter(c => !c.delivered);
-    if (selectedForDelivery.length === undelivered.length) {
+    if (selectedForDelivery.length === undelivered.length && undelivered.length > 0) {
       setSelectedForDelivery([]);
     } else {
       setSelectedForDelivery([...undelivered]);
@@ -436,7 +578,7 @@ const checkSerialNoExists = async (serialNo, currentCertId = null) => {
 
   const selectAllForPrint = () => {
     const filtered = filteredCertificates;
-    if (selectedForPrint.length === filtered.length) {
+    if (selectedForPrint.length === filtered.length && filtered.length > 0) {
       setSelectedForPrint([]);
     } else {
       setSelectedForPrint([...filtered]);
@@ -491,7 +633,7 @@ const checkSerialNoExists = async (serialNo, currentCertId = null) => {
     }
   };
 
-  const handleImportExcel = async (event) => {
+ const handleImportExcel = async (event) => {
   if (readOnly) {
     alert('You do not have permission to add');
     event.target.value = '';
@@ -505,21 +647,64 @@ const checkSerialNoExists = async (serialNo, currentCertId = null) => {
   reader.onload = async (e) => {
     try {
       setLoading(true);
+      setImportProgress({
+        show: true,
+        current: 0,
+        total: 0,
+        status: 'Reading file...',
+        details: [],
+        duplicates: [],
+        errors: []
+      });
+
       const text = e.target.result;
-      const lines = text.split('\n');
+      const lines = text.split('\n').filter(line => line.trim());
       
       if (lines.length < 2) {
-        alert('File is empty or invalid');
+        setImportProgress(prev => ({
+          ...prev,
+          status: 'Error: File is empty',
+          errors: ['File is empty or has no data rows']
+        }));
+        setTimeout(() => {
+          setImportProgress({ show: false, current: 0, total: 0, status: '', details: [], duplicates: [], errors: [] });
+          setLoading(false);
+        }, 3000);
         return;
       }
 
-      const headers = lines[0].split(',').map(h => h.replace(/"/g, '').trim());
+      const separator = lines[0].includes(';') ? ';' : ',';
+      const headers = lines[0].split(separator).map(h => h.replace(/"/g, '').trim());
       
-      const noIndex = headers.findIndex(h => h.toLowerCase().includes('certificate') || h.toLowerCase().includes('no'));
+      setImportProgress(prev => ({
+        ...prev,
+        status: `Found ${lines.length - 1} rows to process`,
+        total: lines.length - 1,
+        details: [`Separator: ${separator}`, `Headers: ${headers.join(', ')}`]
+      }));
+
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      const noIndex = headers.findIndex(h => 
+        h.toLowerCase().includes('certificate') || 
+        h.toLowerCase().includes('no') || 
+        h.toLowerCase() === 'no'
+      );
       const descIndex = headers.findIndex(h => h.toLowerCase().includes('description'));
       
       if (noIndex === -1 || descIndex === -1) {
-        alert('File must have "Certificate No." and "Description" columns');
+        setImportProgress(prev => ({
+          ...prev,
+          status: 'Error: Missing required columns',
+          errors: [
+            'File must have "Certificate No." and "Description" columns',
+            `Found headers: ${headers.join(', ')}`
+          ]
+        }));
+        setTimeout(() => {
+          setImportProgress({ show: false, current: 0, total: 0, status: '', details: [], duplicates: [], errors: [] });
+          setLoading(false);
+        }, 5000);
         return;
       }
 
@@ -527,75 +712,216 @@ const checkSerialNoExists = async (serialNo, currentCertId = null) => {
       const serialIndex = headers.findIndex(h => h.toLowerCase().includes('serial'));
       const statusIndex = headers.findIndex(h => h.toLowerCase().includes('status'));
 
+      // 🚀 تحميل كل Serial Numbers من قاعدة البيانات مرة واحدة!
+      setImportProgress(prev => ({
+        ...prev,
+        status: 'Loading existing serial numbers from database...'
+      }));
+
+      const { data: existingCerts, error: fetchError } = await supabase
+        .from('certificates')
+        .select('serial_no');
+
+      if (fetchError) throw fetchError;
+
+      const existingSerials = new Set(
+        existingCerts
+          .map(c => c.serial_no)
+          .filter(s => s && s.trim() !== '')
+      );
+
+      setImportProgress(prev => ({
+        ...prev,
+        details: [...prev.details, `Found ${existingSerials.size} existing serial numbers`]
+      }));
+
       const importedCerts = [];
       const duplicates = [];
       const errors = [];
+      const skippedEmpty = [];
+      const processedSerials = new Set();
 
+      // معالجة كل سطر
       for (let i = 1; i < lines.length; i++) {
-        if (!lines[i].trim()) continue;
+        const line = lines[i].trim();
         
-        const cells = lines[i].split(',').map(c => c.replace(/"/g, '').trim());
+        if (!line) {
+          skippedEmpty.push(i + 1);
+          continue;
+        }
         
-        if (cells[noIndex] && cells[descIndex]) {
-          const serialNo = serialIndex !== -1 ? cells[serialIndex] : '';
-          
-          if (serialNo && serialNo.trim() !== '') {
-            const exists = await checkSerialNoExists(serialNo);
-            
-            if (exists) {
-              duplicates.push({
-                row: i + 1,
-                certNo: cells[noIndex],
-                serialNo: serialNo
-              });
-              continue;
-            }
+        const rowNum = i + 1;
+        
+        // تحديث كل 5 صفوف بس (مش كل صف)
+        if (i % 5 === 0) {
+          setImportProgress(prev => ({
+            ...prev,
+            current: i,
+            status: `Processing row ${i} of ${lines.length - 1}...`
+          }));
+        }
+
+        const cells = line.split(separator).map(c => c.replace(/"/g, '').trim());
+        
+        const certNo = cells[noIndex] ? cells[noIndex].trim() : '';
+        const description = cells[descIndex] ? cells[descIndex].trim() : '';
+        
+        if (!certNo || !description) {
+          errors.push(`Row ${rowNum}: Missing Certificate No. or Description`);
+          setImportProgress(prev => ({
+            ...prev,
+            errors: [...prev.errors, `Row ${rowNum}: Missing required data`]
+          }));
+          continue;
+        }
+
+        let status = 'Original';
+        if (statusIndex !== -1 && cells[statusIndex]) {
+          const statusValue = cells[statusIndex].trim().toLowerCase();
+          if (statusValue === 'copy' || statusValue === 'original') {
+            status = statusValue.charAt(0).toUpperCase() + statusValue.slice(1);
+          } else {
+            errors.push(`Row ${rowNum}: Invalid Status "${cells[statusIndex]}". Using "Original"`);
+          }
+        }
+
+        const partNo = partIndex !== -1 && cells[partIndex] ? cells[partIndex].trim() : '';
+        const serialNo = serialIndex !== -1 && cells[serialIndex] ? cells[serialIndex].trim() : '';
+
+        // التحقق من Serial No
+        if (serialNo) {
+          // 1. التحقق من التكرار في الملف نفسه
+          if (processedSerials.has(serialNo)) {
+            duplicates.push({
+              row: rowNum,
+              certNo: certNo,
+              serialNo: serialNo,
+              reason: 'Duplicate in file'
+            });
+            setImportProgress(prev => ({
+              ...prev,
+              duplicates: [...prev.duplicates, `Row ${rowNum}: ${certNo} (${serialNo}) - In file`]
+            }));
+            continue;
           }
 
-          importedCerts.push({
-            no: cells[noIndex],
-            description: cells[descIndex],
-            part_no: partIndex !== -1 ? cells[partIndex] : '',
-            serial_no: serialNo,
-            status: statusIndex !== -1 && cells[statusIndex] ? cells[statusIndex] : 'Original',
-            created_date: new Date().toISOString().split('T')[0],
-            delivered: false,
-            delivery_info: null
-          });
+          // 2. التحقق من التكرار في قاعدة البيانات (بدون await!)
+          if (existingSerials.has(serialNo)) {
+            duplicates.push({
+              row: rowNum,
+              certNo: certNo,
+              serialNo: serialNo,
+              reason: 'Already in database'
+            });
+            setImportProgress(prev => ({
+              ...prev,
+              duplicates: [...prev.duplicates, `Row ${rowNum}: ${certNo} (${serialNo}) - In DB`]
+            }));
+            continue;
+          }
+
+          processedSerials.add(serialNo);
+        }
+
+        importedCerts.push({
+          no: certNo,
+          description: description,
+          part_no: partNo,
+          serial_no: serialNo,
+          status: status,
+          created_date: new Date().toISOString().split('T')[0],
+          delivered: false,
+          delivery_info: null
+        });
+
+        // تحديث التفاصيل كل 10 صفوف
+        if (i % 10 === 0) {
+          setImportProgress(prev => ({
+            ...prev,
+            details: [...prev.details.slice(-8), `✓ Row ${rowNum}: ${certNo}`]
+          }));
         }
       }
 
-      let message = '';
-      
+      // تحديث نهائي
+      setImportProgress(prev => ({
+        ...prev,
+        current: lines.length - 1
+      }));
+
+      if (skippedEmpty.length > 0) {
+        setImportProgress(prev => ({
+          ...prev,
+          details: [...prev.details, `Skipped ${skippedEmpty.length} empty row(s)`]
+        }));
+      }
+
+      // حفظ البيانات
       if (importedCerts.length > 0) {
+        setImportProgress(prev => ({
+          ...prev,
+          status: `Saving ${importedCerts.length} certificate(s) to database...`
+        }));
+
         const { error } = await supabase
           .from('certificates')
           .insert(importedCerts);
 
-        if (error) throw error;
+        if (error) {
+          console.error('Supabase error:', error);
+          throw error;
+        }
 
         await loadCertificates();
-        message += `✅ Successfully imported ${importedCerts.length} certificate(s)!\n`;
-      } else {
-        message += '⚠️ No new certificates to import.\n';
-      }
-
-      if (duplicates.length > 0) {
-        message += `\n⚠️ Skipped ${duplicates.length} duplicate(s):\n`;
-        duplicates.slice(0, 5).forEach(dup => {
-          message += `- Row ${dup.row}: ${dup.certNo} (Serial: ${dup.serialNo})\n`;
-        });
-        if (duplicates.length > 5) {
-          message += `... and ${duplicates.length - 5} more\n`;
+        
+        let summaryMessage = `✅ Successfully imported ${importedCerts.length} certificate(s)!`;
+        if (duplicates.length > 0) {
+          summaryMessage += `\n⚠️ Skipped ${duplicates.length} duplicate(s)`;
         }
+        if (errors.length > 0) {
+          summaryMessage += `\n❌ ${errors.length} error(s) found`;
+        }
+        if (skippedEmpty.length > 0) {
+          summaryMessage += `\n📝 ${skippedEmpty.length} empty row(s) skipped`;
+        }
+
+        setImportProgress(prev => ({
+          ...prev,
+          status: summaryMessage
+        }));
+      } else {
+        let message = '⚠️ No certificates imported';
+        if (duplicates.length > 0) {
+          message += `\n${duplicates.length} duplicate(s) found`;
+        }
+        if (errors.length > 0) {
+          message += `\n${errors.length} error(s) found`;
+        }
+        
+        setImportProgress(prev => ({
+          ...prev,
+          status: message
+        }));
       }
 
-      alert(message);
-      setShowImportModal(false);
-      event.target.value = '';
+      setTimeout(() => {
+        setShowImportModal(false);
+        setImportProgress({ show: false, current: 0, total: 0, status: '', details: [], duplicates: [], errors: [] });
+        event.target.value = '';
+      }, 5000);
+
     } catch (error) {
-      alert('Error importing data: ' + error.message);
-      console.error(error);
+      console.error('Import error:', error);
+      setImportProgress(prev => ({
+        ...prev,
+        status: '❌ Error: ' + error.message,
+        errors: [...prev.errors, error.message]
+      }));
+      
+      setTimeout(() => {
+        setImportProgress({ show: false, current: 0, total: 0, status: '', details: [], duplicates: [], errors: [] });
+        setLoading(false);
+      }, 5000);
     } finally {
       setLoading(false);
     }
@@ -603,13 +929,12 @@ const checkSerialNoExists = async (serialNo, currentCertId = null) => {
   
   reader.readAsText(file);
 };
-
   const downloadTemplate = () => {
     const headers = ['Certificate No.', 'Description', 'Part No.', 'Serial No.', 'Status'];
-   const sampleData = [
-  ['CERT-001', 'Sample Certificate Description', 'PART-123', 'SN-456789', 'Original'],
-  ['CERT-002', 'Another Sample Certificate', 'PART-124', 'SN-456790', 'Copy']
-];
+    const sampleData = [
+      ['CERT-001', 'Sample Certificate Description', 'PART-123', 'SN-456789', 'Original'],
+      ['CERT-002', 'Another Sample Certificate', 'PART-124', 'SN-456790', 'Copy']
+    ];
 
     let csv = headers.join(',') + '\n';
     sampleData.forEach(row => {
@@ -701,6 +1026,31 @@ const checkSerialNoExists = async (serialNo, currentCertId = null) => {
           <span className="text-sm font-medium">Processing...</span>
         </div>
       )}
+      {deleteProgress.show && (
+  <div className="fixed top-20 right-4 bg-white border-2 border-red-500 rounded-lg shadow-2xl z-50 p-4 w-80">
+    <div className="flex items-center justify-between mb-2">
+      <span className="text-sm font-bold text-red-600">Deleting Certificates...</span>
+      <span className="text-xs text-gray-600">
+        {deleteProgress.current} / {deleteProgress.total}
+      </span>
+    </div>
+    <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+      <div 
+        className="bg-red-600 h-3 rounded-full transition-all duration-300 flex items-center justify-center"
+        style={{ width: `${(deleteProgress.current / deleteProgress.total) * 100}%` }}
+      >
+        {deleteProgress.current > 0 && (
+          <span className="text-xs text-white font-bold">
+            {Math.round((deleteProgress.current / deleteProgress.total) * 100)}%
+          </span>
+        )}
+      </div>
+    </div>
+    <p className="text-xs text-gray-500 mt-2 text-center">
+      Please wait, do not close the page...
+    </p>
+  </div>
+)}
 
       <style>{`
         @media print {
@@ -836,8 +1186,8 @@ const checkSerialNoExists = async (serialNo, currentCertId = null) => {
             </div>
           </div>
           
-          {(selectedForPrint.length > 0 || selectedForDelivery.length > 0) && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+          {(selectedForPrint.length > 0 || selectedForDelivery.length > 0 || selectedForDelete.length > 0) && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
               {selectedForPrint.length > 0 && (
                 <div className="bg-purple-50 border-l-4 border-purple-500 rounded-r-lg p-2 shadow-sm">
                   <p className="text-xs text-purple-800 font-medium">
@@ -863,6 +1213,23 @@ const checkSerialNoExists = async (serialNo, currentCertId = null) => {
                   </button>
                 </div>
               )}
+
+              {selectedForDelete.length > 0 && !readOnly && allowDelete && (
+                <div className="bg-red-50 border-l-4 border-red-500 rounded-r-lg p-2 shadow-sm flex items-center justify-between">
+                  <p className="text-xs text-red-800 font-medium">
+                    <Trash2 size={12} className="inline mr-1" />
+                    <strong>{selectedForDelete.length}</strong> certificate(s) selected for deletion
+                  </p>
+                  <button
+                    onClick={handleBulkDelete}
+                    disabled={loading}
+                    className="bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700 disabled:bg-gray-300 text-xs font-medium flex items-center gap-1"
+                  >
+                    <Trash2 size={12} />
+                    Delete All
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -882,7 +1249,7 @@ const checkSerialNoExists = async (serialNo, currentCertId = null) => {
                 </select>
               </div>
 
-              <div className="col-span-12 sm:col-span-4 relative">
+              <div className="col-span-12 sm:col-span-3 relative">
                 <Search className="absolute left-3 top-2.5 text-gray-400" size={16} />
                 <input
                   type="text"
@@ -923,7 +1290,7 @@ const checkSerialNoExists = async (serialNo, currentCertId = null) => {
                 </select>
               </div>
 
-              <div className="col-span-6 sm:col-span-1">
+              <div className="col-span-4 sm:col-span-1">
                 <button
                   onClick={selectAllForPrint}
                   className="w-full px-2 py-2 border-2 border-blue-500 text-blue-600 rounded-md hover:bg-blue-50 text-xs font-medium transition-colors"
@@ -934,13 +1301,25 @@ const checkSerialNoExists = async (serialNo, currentCertId = null) => {
               </div>
 
               {!readOnly && (
-                <div className="col-span-6 sm:col-span-1">
+                <div className="col-span-4 sm:col-span-1">
                   <button
                     onClick={selectAllForDelivery}
                     className="w-full px-2 py-2 border-2 border-green-500 text-green-600 rounded-md hover:bg-green-50 text-xs font-medium transition-colors"
                     title="Select All for Delivery"
                   >
                     <Check size={12} className="inline" />
+                  </button>
+                </div>
+              )}
+
+              {!readOnly && allowDelete && (
+                <div className="col-span-4 sm:col-span-1">
+                  <button
+                    onClick={selectAllForDelete}
+                    className="w-full px-2 py-2 border-2 border-red-500 text-red-600 rounded-md hover:bg-red-50 text-xs font-medium transition-colors"
+                    title="Select All for Delete"
+                  >
+                    <Trash2 size={12} className="inline" />
                   </button>
                 </div>
               )}
@@ -1004,6 +1383,15 @@ const checkSerialNoExists = async (serialNo, currentCertId = null) => {
                         </button>
                       </th>
                     )}
+                    {!readOnly && allowDelete && (
+                      <th className="w-10 px-2 py-3 text-left">
+                        <button onClick={selectAllForDelete} title="Select for Delete" className="hover:bg-red-50 p-1 rounded">
+                          {selectedForDelete.length === filteredCertificates.length && filteredCertificates.length > 0 ? 
+                            <CheckSquare size={16} className="text-red-600" /> : <Square size={16} />
+                          }
+                        </button>
+                      </th>
+                    )}
                     <th className="w-28 px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">No.</th>
                     <th className="w-48 px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider hidden md:table-cell">Description</th>
                     <th className="w-28 px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider hidden lg:table-cell">Part No.</th>
@@ -1015,7 +1403,7 @@ const checkSerialNoExists = async (serialNo, currentCertId = null) => {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {paginatedCertificates.length === 0 ? (
                     <tr>
-                      <td colSpan={readOnly ? "7" : "8"} className="px-6 py-12 text-center text-gray-500 text-sm">
+                      <td colSpan={readOnly ? (allowDelete ? "8" : "7") : (allowDelete ? "9" : "8")} className="px-6 py-12 text-center text-gray-500 text-sm">
                         <FileText size={48} className="mx-auto mb-3 text-gray-300" />
                         <p className="font-medium">No certificates found</p>
                         <p className="text-xs text-gray-400 mt-1">Try adjusting your search or filters</p>
@@ -1043,6 +1431,19 @@ const checkSerialNoExists = async (serialNo, currentCertId = null) => {
                                 <CheckSquare size={16} className="text-gray-300" />
                               ) : selectedForDelivery.find(c => c.id === cert.id) ? 
                                 <CheckSquare size={16} className="text-green-600" /> : 
+                                <Square size={16} className="text-gray-400 group-hover:text-gray-600" />
+                              }
+                            </button>
+                          </td>
+                        )}
+                        {!readOnly && allowDelete && (
+                          <td className="w-10 px-2 py-3">
+                            <button 
+                              onClick={() => toggleSelectForDelete(cert.id)} 
+                              className="hover:bg-red-100 p-1 rounded"
+                            >
+                              {selectedForDelete.find(c => c.id === cert.id) ? 
+                                <CheckSquare size={16} className="text-red-600" /> : 
                                 <Square size={16} className="text-gray-400 group-hover:text-gray-600" />
                               }
                             </button>
@@ -1226,17 +1627,17 @@ const checkSerialNoExists = async (serialNo, currentCertId = null) => {
                   />
                 </div>
                 <div>
-  <label className="block text-xs sm:text-sm font-medium mb-2">Status *</label>
-  <select
-    value={formData.status}
-    onChange={(e) => setFormData({...formData, status: e.target.value})}
-    className="w-full px-3 sm:px-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-    required
-  >
-    <option value="Original">Original</option>
-    <option value="Copy">Copy</option>
-  </select>
-</div>
+                  <label className="block text-xs sm:text-sm font-medium mb-2">Status *</label>
+                  <select
+                    value={formData.status}
+                    onChange={(e) => setFormData({...formData, status: e.target.value})}
+                    className="w-full px-3 sm:px-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                  >
+                    <option value="Original">Original</option>
+                    <option value="Copy">Copy</option>
+                  </select>
+                </div>
                 <div className="col-span-1 sm:col-span-2">
                   <label className="block text-xs sm:text-sm font-medium mb-2">Description*</label>
                   <input
@@ -1450,6 +1851,111 @@ const checkSerialNoExists = async (serialNo, currentCertId = null) => {
             </div>
           </div>
         )}
+{importProgress.show && (
+          <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
+              <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
+                <Upload className="text-blue-600" size={28} />
+                Import Progress
+              </h2>
+
+              <div className="mb-6">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm font-medium text-gray-700">
+                    {importProgress.status}
+                  </span>
+                  <span className="text-sm font-semibold text-blue-600">
+                    {importProgress.total > 0 
+                      ? `${importProgress.current} / ${importProgress.total}` 
+                      : 'Processing...'}
+                  </span>
+                </div>
+                
+                <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                  <div 
+                    className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all duration-300 ease-out"
+                    style={{ 
+                      width: importProgress.total > 0 
+                        ? `${(importProgress.current / importProgress.total) * 100}%` 
+                        : '50%' 
+                    }}
+                  >
+                    <div className="w-full h-full animate-pulse"></div>
+                  </div>
+                </div>
+                
+                {importProgress.total > 0 && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    {Math.round((importProgress.current / importProgress.total) * 100)}% completed
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-4">
+                {importProgress.details.length > 0 && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3 max-h-32 overflow-y-auto">
+                    <p className="text-sm font-semibold text-green-800 mb-2 flex items-center gap-2">
+                      <Check size={16} />
+                      Processed ({importProgress.details.length})
+                    </p>
+                    <div className="space-y-1">
+                      {importProgress.details.slice(-5).map((detail, idx) => (
+                        <p key={idx} className="text-xs text-green-700">{detail}</p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {importProgress.duplicates.length > 0 && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 max-h-32 overflow-y-auto">
+                    <p className="text-sm font-semibold text-yellow-800 mb-2 flex items-center gap-2">
+                      <AlertCircle size={16} />
+                      Duplicates Skipped ({importProgress.duplicates.length})
+                    </p>
+                    <div className="space-y-1">
+                      {importProgress.duplicates.slice(0, 5).map((dup, idx) => (
+                        <p key={idx} className="text-xs text-yellow-700">{dup}</p>
+                      ))}
+                      {importProgress.duplicates.length > 5 && (
+                        <p className="text-xs text-yellow-600 italic">
+                          ... and {importProgress.duplicates.length - 5} more
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {importProgress.errors.length > 0 && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 max-h-32 overflow-y-auto">
+                    <p className="text-sm font-semibold text-red-800 mb-2 flex items-center gap-2">
+                      <X size={16} />
+                      Errors ({importProgress.errors.length})
+                    </p>
+                    <div className="space-y-1">
+                      {importProgress.errors.slice(0, 5).map((error, idx) => (
+                        <p key={idx} className="text-xs text-red-700">{error}</p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {(importProgress.status.includes('✅') || importProgress.status.includes('❌')) && (
+                <div className="mt-6 flex justify-end">
+                  <button
+                    onClick={() => {
+                      setImportProgress({ show: false, current: 0, total: 0, status: '', details: [], duplicates: [], errors: [] });
+                      setShowImportModal(false);
+                    }}
+                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1646,6 +2152,7 @@ const CombinedCertificatesPrint = ({ certificates }) => (
         </div>
       </div>
     </div>
+    
   </div>
 );
 
